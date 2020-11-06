@@ -44,23 +44,37 @@ public abstract class TransactionModelBase
 
     protected IEnumerator ConvertToNativeTarget(string nativeCurrency, decimal nativeAmount)
     {
-        string date = TimeStamp.ToString("yyyy-MM-dd");
+        CurrencyConvertion currencyConvertion = MainComponent.Instance.CurrencyConvertionsContainer[nativeCurrency + "->" + MainComponent.Instance.TargetCurrency, TimeStamp];
 
-        using (UnityWebRequest exhangeWebRequest = UnityWebRequest.Get($"http://currencies.apps.grandtrunk.net/getrate/{date}/{nativeCurrency}/{MainComponent.Instance.TargetCurrency}"))
+        if (currencyConvertion != null)
         {
-            yield return exhangeWebRequest.SendWebRequest();
+            NativeCurrency = MainComponent.Instance.TargetCurrency;
+            NativeAmount = nativeAmount * currencyConvertion.ConvertionRate;
+            ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
+            IsAwatingData = false;
+        }
+        else
+        {
+            string date = TimeStamp.ToString("yyyy-MM-dd");
 
-            if (exhangeWebRequest.isNetworkError)
+            using (UnityWebRequest exhangeWebRequest = UnityWebRequest.Get($"http://currencies.apps.grandtrunk.net/getrate/{date}/{nativeCurrency}/{MainComponent.Instance.TargetCurrency}"))
             {
-            }
-            else
-            {
-                if (decimal.TryParse(exhangeWebRequest.downloadHandler.text, out decimal exchangeRate))
+                yield return exhangeWebRequest.SendWebRequest();
+
+                if (exhangeWebRequest.isNetworkError)
                 {
-                    NativeCurrency = MainComponent.Instance.TargetCurrency;
-                    NativeAmount = nativeAmount * exchangeRate;
-                    ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
-                    IsAwatingData = false;
+                }
+                else
+                {
+                    if (decimal.TryParse(exhangeWebRequest.downloadHandler.text, out decimal exchangeRate))
+                    {
+                        MainComponent.Instance.CurrencyConvertionsContainer.Add(new CurrencyConvertion(nativeCurrency, MainComponent.Instance.TargetCurrency, TimeStamp, exchangeRate));
+
+                        NativeCurrency = MainComponent.Instance.TargetCurrency;
+                        NativeAmount = nativeAmount * exchangeRate;
+                        ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
+                        IsAwatingData = false;
+                    }
                 }
             }
         }

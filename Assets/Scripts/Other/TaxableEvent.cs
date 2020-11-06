@@ -1,26 +1,37 @@
 ﻿using System;
+using System.Globalization;
 
 public sealed class TaxableEvent
 {
-    public const string CSV_DATA_ORDER = "Transaction ID,Date,Amount";
+    public const string CSV_DATA_ORDER = "Purchase transaction ID,Sale transaction ID,Date,Amount,Currency,Total";
 
-    private readonly string _id;
     private readonly DateTime _date;
     private readonly decimal _amount;
+    private readonly string _currency;
+    private readonly string _saleTransactionID;
+    private readonly string _purchaseTransactionID;
+    private readonly decimal _totalAmount;
 
-    public string Id => _id;
     public DateTime Date => _date;
     public decimal Amount => _amount;
+    public string Currency => _currency;
+    public decimal TotalAmount => _totalAmount;
+    public string SaleTransactionID => _saleTransactionID;
+    public string PurchaseTransactionID => _purchaseTransactionID;
 
-    public TaxableEvent(string id, DateTime date, decimal amount)
+    public TaxableEvent(string purchaseTransactionID, string saleTransactionID,  DateTime date, decimal amount, string currency, decimal totalAmount)
     {
-        _id = id;
         _date = date;
         _amount = amount;
+        _currency = currency;
+        _totalAmount = totalAmount;
+        _saleTransactionID = saleTransactionID;
+        _purchaseTransactionID = purchaseTransactionID;
     }
 
     public override string ToString()
     {
-        return _id + "," + _date + "," + _amount;
+        return _purchaseTransactionID + "," + _saleTransactionID + "," + _date + ",\"" + _amount.ToString() + "\"," + _currency + ",\"" + 
+            _totalAmount.ToString() + "\"";
     }
 }

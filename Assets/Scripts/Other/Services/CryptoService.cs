@@ -9,6 +9,7 @@ using UnityEngine;
 public sealed class CryptoService : ICryptoService
 {
     public readonly static string TRANSACTIONS_FOLDER_PATH = Application.persistentDataPath + "/Crypto_Transactions";
+    public static readonly string CURRENCY_CONVERTIONS = Application.persistentDataPath + "/CryptoApplicationData/CurrencyConvertions.Json";
 
     private readonly static string[] SUPPORTED_TRANSACTIONS_FORMAT_PATHS = new string[] 
     {
@@ -167,36 +168,46 @@ public sealed class CryptoService : ICryptoService
 
     private void CalculateSaleFromPurchases(List<TransactionModelBase> purchaseTransactionsNeededToCoverSale, TransactionModelBase saleTransaction)
     {
-        Dictionary<string, decimal> transactionProfit = new Dictionary<string, decimal>();
-
         foreach (TransactionModelBase transaction in purchaseTransactionsNeededToCoverSale)
         {
             if (saleTransaction.CryptoCurrencyAmount - transaction.CryptoCurrencyAmount > 0)
             {
                 saleTransaction.CryptoCurrencyAmount -= transaction.CryptoCurrencyAmount;
-                transaction.CryptoCurrencyAmount = 0;
-
-                transactionProfit.Add(transaction.TransactionId, (saleTransaction.ValueForOneCryptoTokenInNative - transaction.ValueForOneCryptoTokenInNative) * transaction.CryptoCurrencyAmount);
+                transaction.CryptoCurrencyAmount = 0;            
             }
             else
             {
                 transaction.CryptoCurrencyAmount -= saleTransaction.CryptoCurrencyAmount;
 
-                transactionProfit.Add(transaction.TransactionId, (saleTransaction.ValueForOneCryptoTokenInNative - transaction.ValueForOneCryptoTokenInNative) * saleTransaction.CryptoCurrencyAmount);
             }
-        }
 
-        foreach (KeyValuePair<string, decimal> transactionPair in transactionProfit)
-        {
-            TaxableEvent taxableEvent = new TaxableEvent(transactionPair.Key, purchaseTransactionsNeededToCoverSale.Find(t => t.TransactionId == transactionPair.Key).TimeStamp, transactionPair.Value);
+            decimal transactionProfit = (saleTransaction.ValueForOneCryptoTokenInNative - transaction.ValueForOneCryptoTokenInNative) * transaction.CryptoCurrencyAmount;
 
-            if (transactionPair.Value < 0)
+            if (transactionProfit < 0)
             {
-                _losses.Add(taxableEvent);
+                if (_losses.Count > 0)
+                {
+                    _losses.Add(new TaxableEvent(transaction.TransactionId, saleTransaction.TransactionId, transaction.TimeStamp, transactionProfit, MainComponent.Instance.TargetCurrency,
+                        _losses[_losses.Count - 1].TotalAmount + transactionProfit));
+                }
+                else
+                {
+                    _losses.Add(new TaxableEvent(transaction.TransactionId, saleTransaction.TransactionId, transaction.TimeStamp, transactionProfit, MainComponent.Instance.TargetCurrency,
+                        transactionProfit));
+                }
             }
-            else if(transactionPair.Value > 0)
+            else if (transactionProfit > 0)
             {
-                _gains.Add(taxableEvent);
+                if (_gains.Count > 0)
+                {
+                    _gains.Add(new TaxableEvent(transaction.TransactionId, saleTransaction.TransactionId, transaction.TimeStamp, transactionProfit, MainComponent.Instance.TargetCurrency,
+                        _gains[_gains.Count - 1].TotalAmount + transactionProfit));
+                }
+                else
+                {
+                    _gains.Add(new TaxableEvent(transaction.TransactionId, saleTransaction.TransactionId, transaction.TimeStamp, transactionProfit, MainComponent.Instance.TargetCurrency,
+                        transactionProfit));
+                }
             }
         }
 
