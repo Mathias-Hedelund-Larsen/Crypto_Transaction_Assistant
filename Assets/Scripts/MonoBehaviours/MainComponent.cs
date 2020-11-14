@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.IO;
 using UnityEngine;
 
@@ -10,8 +11,11 @@ public class MainComponent : MonoBehaviour
     private CurrencyConvertionsContainer _currencyConvertionsContainer;
 
     private ICryptoService _cryptoService;
+    private bool _runCalculations = false;
 
-    public string TargetCurrency { get { return _targetCurrency; } set { _targetCurrency = value; } }
+    public Action OnLanguageChange { get; set; }
+
+    public string TargetCurrency { get { return _targetCurrency; } set { _targetCurrency = value; OnLanguageChange?.Invoke(); } }
 
     public static MainComponent Instance { get; private set; }
 
@@ -20,7 +24,6 @@ public class MainComponent : MonoBehaviour
     private void Awake()
     {
         Instance = this;
-        enabled = false;
 
         if(!Directory.Exists(Application.persistentDataPath + "/CryptoApplicationData"))
         {
@@ -46,16 +49,16 @@ public class MainComponent : MonoBehaviour
 
     public void Execute()
     {
-        enabled = true;
+        _runCalculations = true;
     }
 
     private void Update()
     {
-        if (!_cryptoService.IsAnyTransactionAwaitingData)
+        if (_runCalculations && !_cryptoService.IsAnyTransactionAwaitingData)
         {
             _cryptoService.RunCalculations();
 
-            enabled = false;
+            _runCalculations = false;
         }
     }
 

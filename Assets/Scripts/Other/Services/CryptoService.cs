@@ -9,7 +9,8 @@ using UnityEngine;
 public sealed class CryptoService : ICryptoService
 {
     public readonly static string TRANSACTIONS_FOLDER_PATH = Application.persistentDataPath + "/Crypto_Transactions";
-    public static readonly string CURRENCY_CONVERTIONS = Application.persistentDataPath + "/CryptoApplicationData/CurrencyConvertions.Json";
+    public readonly static string CURRENCY_CONVERTIONS = Application.persistentDataPath + "/CryptoApplicationData/CurrencyConvertions.Json";
+    public readonly static string CURRENCY_CODES_FILE_PATH = Application.persistentDataPath + "/CryptoApplicationData/CurrencyCodes.txt";
 
     private readonly static string[] SUPPORTED_TRANSACTIONS_FORMAT_PATHS = new string[] 
     {

@@ -25,6 +25,8 @@ public abstract class TransactionModelBase
 
     public TransactionType TransactionType { get; protected set; }
 
+    public bool FullyTaxed { get; protected set; }
+
     public abstract string WalletName { get; }
 
     public string TransactionId 

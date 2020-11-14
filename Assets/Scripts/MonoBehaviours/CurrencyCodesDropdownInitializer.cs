@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -15,7 +16,18 @@ public sealed class CurrencyCodesDropdownInitializer : MonoBehaviour
     {
         _dropdown = GetComponent<Dropdown>();
 
-        StartCoroutine(GetApiCodes());
+        if (File.Exists(CryptoService.CURRENCY_CODES_FILE_PATH))
+        {
+            _currencyCodes = new List<string>(File.ReadAllText(CryptoService.CURRENCY_CODES_FILE_PATH).Split('\n'));
+
+            MainComponent.Instance.TargetCurrency = _currencyCodes[0];
+
+            _dropdown.options = _currencyCodes.Select(c => new Dropdown.OptionData(c)).ToList();
+        }
+        else
+        {
+            StartCoroutine(GetApiCodes());
+        }
     }
 
     private IEnumerator GetApiCodes()
@@ -45,15 +57,20 @@ public sealed class CurrencyCodesDropdownInitializer : MonoBehaviour
                     }
                 }
 
+                using (StreamWriter streamWriter = new StreamWriter(CryptoService.CURRENCY_CODES_FILE_PATH))
+                {
+                    streamWriter.Write(string.Join("\n", _currencyCodes));
+                }
+
                 MainComponent.Instance.TargetCurrency = _currencyCodes[0];
 
-                _dropdown.AddOptions(_currencyCodes.Select(c => new Dropdown.OptionData(c)).ToList());
+                _dropdown.options = _currencyCodes.Select(c => new Dropdown.OptionData(c)).ToList();
             }
         }
     }
 
-    public void SetTargetCurrency(int currencyIndex)
+    public void SetTargetCurrency(int currency)
     {
-        MainComponent.Instance.TargetCurrency = _currencyCodes[currencyIndex];
+        MainComponent.Instance.TargetCurrency = _currencyCodes[currency];
     }
 }
