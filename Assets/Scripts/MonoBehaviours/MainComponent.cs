@@ -25,6 +25,11 @@ public class MainComponent : MonoBehaviour
     {
         Instance = this;
 
+        if (File.Exists(Application.persistentDataPath + "/TestMap.txt"))
+        {
+            BinanceChain.TransactionFromHash tx = JsonUtility.FromJson<BinanceChain.TransactionFromHash>(File.ReadAllText(Application.persistentDataPath + "/TestMap.txt"));
+        }
+
         if(!Directory.Exists(Application.persistentDataPath + "/CryptoApplicationData"))
         {
             Directory.CreateDirectory(Application.persistentDataPath + "/CryptoApplicationData");
