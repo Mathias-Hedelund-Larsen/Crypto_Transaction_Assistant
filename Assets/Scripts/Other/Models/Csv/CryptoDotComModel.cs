@@ -8,6 +8,12 @@ public sealed class CryptoDotComModel : TransactionModelBase
 
     private const string CRYPTO_EXHANGE = "crypto_exchange";
 
+    private static readonly string[] REBATES =
+    {
+        "referral_card_cashback",
+        "reimbursement"
+    };
+
     private static readonly string[] SALES = new string[]
     {
         "card_top_up",
@@ -42,7 +48,7 @@ public sealed class CryptoDotComModel : TransactionModelBase
 
     public override string WalletName => "CryptoDotCom";
 
-    public override IEnumerable<TransactionModelBase> Init(string[] entryData, Func<string, Type, object> convertFromString)
+    public override IEnumerable<TransactionModelBase> Init(string fileName, string[] entryData, Func<string, Type, object> convertFromString)
     {       
         string transactionKind = entryData[9];
 
@@ -92,24 +98,23 @@ public sealed class CryptoDotComModel : TransactionModelBase
         {
             TransactionType = TransactionType.Purchase;
 
+            if (REBATES.Contains(transactionKind))
+            {
+                TransactionType = TransactionType.Rebate;
+            }
+
             if (FULL_TAX.Contains(transactionKind))
             {
+                if (transactionKind == FULL_TAX[0])
+                {
+                    TransactionType = TransactionType.Interest;
+                }
+
                 FullyTaxed = true;
             }
         }
 
-        if (NativeCurrency != MainComponent.Instance.TargetCurrency)
-        {
-            IsAwatingData = true;
-            MainComponent.Instance.StartCoroutine(ConvertToNativeTarget(NativeCurrency, NativeAmount));
-            MainComponent.Instance.OnLanguageChange += () => MainComponent.Instance.StartCoroutine(ConvertToNativeTarget(NativeCurrency, NativeAmount));
-        }
-        else
-        {
-            IsAwatingData = false;
-            ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
-            MainComponent.Instance.OnLanguageChange += () => MainComponent.Instance.StartCoroutine(ConvertToNativeTarget(NativeCurrency, NativeAmount));
-        }
+        UpdateCurrency();
     }
 
     private CryptoDotComModel SetupExchangeTransaction(string[] entryData, Func<string, Type, object> convertFromString)
@@ -135,16 +140,7 @@ public sealed class CryptoDotComModel : TransactionModelBase
         CryptoCurrency = entryData[0];
         CryptoCurrencyAmount = (decimal)convertFromString.Invoke(entryData[1], typeof(decimal));
 
-        if (NativeCurrency != MainComponent.Instance.TargetCurrency)
-        {
-            IsAwatingData = true;
-            MainComponent.Instance.StartCoroutine(ConvertToNativeTarget(NativeCurrency, NativeAmount));
-        }
-        else
-        {
-            IsAwatingData = false;
-            ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
-        }
+        UpdateCurrency();
     }
 
     public override TransactionModelBase Clone()

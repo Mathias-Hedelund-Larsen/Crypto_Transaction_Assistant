@@ -5,7 +5,7 @@ using UnityEngine.Networking;
 
 public abstract class TransactionModelBase
 {
-    public const string CSV_DATA_ORDER = "Transaction ID,Date,Crypto currency, Crypto currency amount,Native currency,Native currency amount,Transaction type";
+    public const string CSV_DATA_ORDER = "Transaction ID,Date,Crypto currency, Crypto currency amount,Native currency,Native currency amount,Transaction type,Wallet name";
 
     private string _transactionId;
 
@@ -13,7 +13,7 @@ public abstract class TransactionModelBase
 
     public bool IsAwatingData { get; protected set; }
 
-    public decimal NativeAmount { get; protected set; }
+    public decimal NativeAmount { get; set; }
 
     public string NativeCurrency { get; protected set; }
 
@@ -29,6 +29,8 @@ public abstract class TransactionModelBase
 
     public abstract string WalletName { get; }
 
+    public virtual char CSVSplit => ',';
+
     public string TransactionId 
     { 
         get
@@ -42,7 +44,7 @@ public abstract class TransactionModelBase
         }
     }
 
-    public abstract IEnumerable<TransactionModelBase> Init(string[] entryData, Func<string, Type, object> convertFromString);
+    public abstract IEnumerable<TransactionModelBase> Init(string fileName, string[] entryData, Func<string, Type, object> convertFromString);
 
     protected IEnumerator ConvertToNativeTarget(string nativeCurrency, decimal nativeAmount)
     {
@@ -84,8 +86,48 @@ public abstract class TransactionModelBase
 
     public abstract TransactionModelBase Clone();
 
+    protected void UpdateCurrency()
+    {
+        MainComponent.Instance.OnLanguageChange -= UpdateCurrency;
+
+        if (IsAwatingData)
+        {
+            MainComponent.Instance.StartCoroutine(AwaitData());
+        }
+        else
+        {
+            NativCurrencyToTargetCurrency();
+        }
+        
+        MainComponent.Instance.OnLanguageChange += UpdateCurrency;
+    }
+
+    private void NativCurrencyToTargetCurrency()
+    {
+        if (NativeCurrency != MainComponent.Instance.TargetCurrency)
+        {
+            IsAwatingData = true;
+            MainComponent.Instance.StartCoroutine(ConvertToNativeTarget(NativeCurrency, NativeAmount));
+        }
+        else
+        {
+            IsAwatingData = false;
+            ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
+        }
+    }
+
+    private IEnumerator AwaitData()
+    {
+        while (IsAwatingData)
+        {
+            yield return null;
+        }
+
+        NativCurrencyToTargetCurrency();
+    }
+
     public override string ToString()
     {
-        return TransactionId + "," + TimeStamp + "," + CryptoCurrency + "," + CryptoCurrencyAmount + "," + NativeCurrency + "," + NativeAmount + "," + TransactionType;
+        return TransactionId + "," + TimeStamp + "," + CryptoCurrency + "," + CryptoCurrencyAmount + "," + NativeCurrency + "," + NativeAmount + "," + TransactionType + "," + WalletName;
     }
 }

@@ -7,12 +7,12 @@ namespace BinanceChain
     public sealed class TransactionCoin 
     {
         [SerializeField]
-        private string amount;
-
-        [SerializeField]
         private string denom;
 
-        public string Amount { get => amount; }
+        [SerializeField]
+        private string amount;
+
         public string Denom { get => denom; }
+        public decimal Amount { get => decimal.Parse(amount); }
     }
 }

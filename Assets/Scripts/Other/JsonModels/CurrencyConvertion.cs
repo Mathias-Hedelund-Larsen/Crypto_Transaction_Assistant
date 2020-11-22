@@ -5,6 +5,9 @@ using UnityEngine;
 [Serializable]
 public sealed class CurrencyConvertion 
 {
+    [NonSerialized]
+    private bool _initialized = false;
+
     [SerializeField]
     private string _fromCurrency;
 
@@ -25,7 +28,7 @@ public sealed class CurrencyConvertion
     {
         get 
         {
-            if (_convertionRate == decimal.MinValue)
+            if (!_initialized)
             {
                 _convertionRate = decimal.Parse(_convertionRateS);
             }
@@ -43,5 +46,6 @@ public sealed class CurrencyConvertion
         _dateOfConvertionRate = dateOfConvertionRate;
         _convertionRate = convertionRate;
         _convertionRateS = convertionRate.ToString(CultureInfo.InvariantCulture);
+        _initialized = true;
     }
 }
