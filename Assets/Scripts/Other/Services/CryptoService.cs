@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.Serialization;
+using System.Threading.Tasks;
 using UnityEngine;
 
 public sealed class CryptoService : ICryptoService
@@ -12,45 +13,40 @@ public sealed class CryptoService : ICryptoService
     public readonly static string CURRENCY_CONVERTIONS = Application.persistentDataPath + "/CryptoApplicationData/CurrencyConvertions.Json";
     public readonly static string CURRENCY_CODES_FILE_PATH = Application.persistentDataPath + "/CryptoApplicationData/CurrencyCodes.txt";
 
-    private readonly static string[] SUPPORTED_TRANSACTIONS_FORMAT_PATHS = new string[] 
+    private readonly static string[] SUPPORTED_TRANSACTIONS_FORMAT_PATHS = new string[]
     {
         TRANSACTIONS_FOLDER_PATH + "/CryptoDotCom",
         TRANSACTIONS_FOLDER_PATH + "/Celsius",
         TRANSACTIONS_FOLDER_PATH + "/AtomicWallet",
-        TRANSACTIONS_FOLDER_PATH + "/CoinBase" 
+        TRANSACTIONS_FOLDER_PATH + "/CoinBase"
     };
 
     private List<TaxableEvent> _gains = new List<TaxableEvent>();
     private List<TaxableEvent> _losses = new List<TaxableEvent>();
-    private Dictionary<string, List<TransactionModelBase>> _transactions = new Dictionary<string, List<TransactionModelBase>>();
-
-    public bool IsAnyTransactionAwaitingData
-    {
-        get
-        {
-            foreach (KeyValuePair<string, List<TransactionModelBase>> transaction in _transactions)
-            {
-                if (transaction.Value.Any(t => t.IsAwatingData))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-    }
+    private Dictionary<string, List<ITransactionModel>> _transactions = new Dictionary<string, List<ITransactionModel>>();
+    private readonly Dictionary<Type, Func<string, string, Func<string, Type, object>, Task<List<ITransactionModel>>>> _createTransactions;
 
     public CryptoService()
     {
+        _createTransactions = new Dictionary<Type, Func<string, string, Func<string, Type, object>, Task<List<ITransactionModel>>>>();
+
+        _createTransactions.Add(typeof(CryptoDotComModel), CryptoDotComModel.InitializeFromData);
+        _createTransactions.Add(typeof(CelsiusWalletModel), CelsiusWalletModel.InitializeFromData);
+        _createTransactions.Add(typeof(AtomicWalletModel), AtomicWalletModel.InitializeFromData);
+
         GenerateFolders();
 
         GenerateReadMeInFolders();
+
+        List<Task<IEnumerable<ITransactionModel>>> transactionModelTasks = new List<Task<IEnumerable<ITransactionModel>>>();
+
+        List<TransactionInformation> transactionInformations = new List<TransactionInformation>();
 
         foreach (string directoryPath in SUPPORTED_TRANSACTIONS_FORMAT_PATHS)
         {
             string[] filePaths = Directory.GetFiles(directoryPath).Where(f => !f.ToLower().Contains("readme.txt")).ToArray();
 
-            Type modelType = null;        
+            Type modelType = null;
 
             if (directoryPath == SUPPORTED_TRANSACTIONS_FORMAT_PATHS[0])
             {
@@ -67,29 +63,16 @@ public sealed class CryptoService : ICryptoService
 
             foreach (string filePath in filePaths)
             {
-                string[] lines = File.ReadAllLines(filePath);
+                IEnumerable<string> lines = File.ReadAllLines(filePath).Skip(1);
 
-                List<IEnumerable<TransactionModelBase>> transactions = lines.Skip(1).Select(line => InitializeTransaction(Path.GetFileName(filePath), line, modelType)).ToList();
-
-                foreach (IEnumerable<TransactionModelBase> transaction in transactions)
+                foreach (string line in lines)
                 {
-                    foreach (TransactionModelBase transactionModel in transaction)
-                    {
-                        if (!_transactions.ContainsKey(transactionModel.CryptoCurrency))
-                        {
-                            _transactions.Add(transactionModel.CryptoCurrency, new List<TransactionModelBase>());
-                        }
-
-                        _transactions[transactionModel.CryptoCurrency].Add(transactionModel);
-                    }
+                    transactionInformations.Add(new TransactionInformation(Path.GetFileName(filePath), line, modelType));                    
                 }
             }
         }
 
-        foreach (KeyValuePair<string, List<TransactionModelBase>> pair in _transactions)
-        {
-            pair.Value.Sort((x, y) => DateTime.Compare(x.TimeStamp, y.TimeStamp));
-        }
+        InitializeTransaction(transactionInformations).Wait();
     }
 
     private void GenerateReadMeInFolders()
@@ -129,9 +112,9 @@ public sealed class CryptoService : ICryptoService
 
     private void WriteOverview()
     {
-        List<TransactionModelBase> transactions = new List<TransactionModelBase>();
+        List<ITransactionModel> transactions = new List<ITransactionModel>();
 
-        foreach (KeyValuePair<string, List<TransactionModelBase>> currencyTransactionPair in _transactions)
+        foreach (KeyValuePair<string, List<ITransactionModel>> currencyTransactionPair in _transactions)
         {
             transactions.AddRange(currencyTransactionPair.Value);
         }
@@ -140,9 +123,9 @@ public sealed class CryptoService : ICryptoService
 
         using (StreamWriter streamWriter = new StreamWriter(TRANSACTIONS_FOLDER_PATH + "/Overview.csv"))
         {
-            streamWriter.WriteLine(TransactionModelBase.CSV_DATA_ORDER);
+            streamWriter.WriteLine(CryptoDotComModel.CSV_DATA_ORDER);
 
-            foreach (TransactionModelBase transaction in transactions)
+            foreach (ITransactionModel transaction in transactions)
             {
                 streamWriter.WriteLine(transaction.ToString());
             }
@@ -155,17 +138,17 @@ public sealed class CryptoService : ICryptoService
 
         WriteOverview();
 
-        List<TransactionModelBase> purchaseTransactions = new List<TransactionModelBase>();
+        List<ITransactionModel> purchaseTransactions = new List<ITransactionModel>();
 
-        foreach (KeyValuePair<string, List<TransactionModelBase>> currencyTransaction in _transactions)
+        foreach (KeyValuePair<string, List<ITransactionModel>> currencyTransaction in _transactions)
         {
-            foreach (TransactionModelBase transaction in currencyTransaction.Value)
+            foreach (ITransactionModel transaction in currencyTransaction.Value)
             {
-                if(transaction.TransactionType == TransactionType.Purchase)
+                if (transaction.TransactionType == TransactionType.Purchase)
                 {
                     purchaseTransactions.Add(transaction);
                 }
-                else if(transaction.TransactionType == TransactionType.Sale)
+                else if (transaction.TransactionType == TransactionType.Sale)
                 {
                     decimal cryptoCurrencyAmountFromTransactions = 0;
 
@@ -175,9 +158,9 @@ public sealed class CryptoService : ICryptoService
 
                         if (cryptoCurrencyAmountFromTransactions >= transaction.CryptoCurrencyAmount)
                         {
-                            List<TransactionModelBase> purchaseTransactionsNeededToCoverSale = purchaseTransactions.Take(i + 1).ToList();
+                            List<ITransactionModel> purchaseTransactionsNeededToCoverSale = purchaseTransactions.Take(i + 1).ToList();
 
-                            CalculateSaleFromPurchases(purchaseTransactionsNeededToCoverSale, transaction);                      
+                            CalculateSaleFromPurchases(purchaseTransactionsNeededToCoverSale, transaction);
 
                             if (purchaseTransactions[i].CryptoCurrencyAmount > 0)
                             {
@@ -200,14 +183,14 @@ public sealed class CryptoService : ICryptoService
 
     private void HandleReversions()
     {
-        foreach (KeyValuePair<string, List<TransactionModelBase>> currencyTransactionPair in _transactions)
+        foreach (KeyValuePair<string, List<ITransactionModel>> currencyTransactionPair in _transactions)
         {
-            List<TransactionModelBase> transactionsToRemove = new List<TransactionModelBase>();
-            List<TransactionModelBase> reversionTransactions = currencyTransactionPair.Value.Where(t => t.TransactionType == TransactionType.Reversion).ToList();
+            List<ITransactionModel> transactionsToRemove = new List<ITransactionModel>();
+            List<ITransactionModel> reversionTransactions = currencyTransactionPair.Value.Where(t => t.TransactionType == TransactionType.Reversion).ToList();
 
-            foreach (TransactionModelBase reversionTransaction in reversionTransactions)
+            foreach (ITransactionModel reversionTransaction in reversionTransactions)
             {
-                TransactionModelBase revertedTransaction = currencyTransactionPair.Value.Where(t => t.CryptoCurrencyAmount == reversionTransaction.CryptoCurrencyAmount * -1 &&
+                ITransactionModel revertedTransaction = currencyTransactionPair.Value.Where(t => t.CryptoCurrencyAmount == reversionTransaction.CryptoCurrencyAmount * -1 &&
                     t.TimeStamp < reversionTransaction.TimeStamp).OrderBy(t => Math.Abs((t.TimeStamp - reversionTransaction.TimeStamp).Ticks)).FirstOrDefault();
 
                 if (revertedTransaction != null)
@@ -222,21 +205,21 @@ public sealed class CryptoService : ICryptoService
                 }
             }
 
-            foreach (TransactionModelBase transactionToRemove in transactionsToRemove)
+            foreach (ITransactionModel transactionToRemove in transactionsToRemove)
             {
                 currencyTransactionPair.Value.Remove(transactionToRemove);
             }
         }
     }
 
-    private void CalculateSaleFromPurchases(List<TransactionModelBase> purchaseTransactionsNeededToCoverSale, TransactionModelBase saleTransaction)
+    private void CalculateSaleFromPurchases(List<ITransactionModel> purchaseTransactionsNeededToCoverSale, ITransactionModel saleTransaction)
     {
-        foreach (TransactionModelBase transaction in purchaseTransactionsNeededToCoverSale)
+        foreach (ITransactionModel transaction in purchaseTransactionsNeededToCoverSale)
         {
             if (saleTransaction.CryptoCurrencyAmount - transaction.CryptoCurrencyAmount > 0)
             {
                 saleTransaction.CryptoCurrencyAmount -= transaction.CryptoCurrencyAmount;
-                transaction.CryptoCurrencyAmount = 0;            
+                transaction.CryptoCurrencyAmount = 0;
             }
             else
             {
@@ -304,11 +287,34 @@ public sealed class CryptoService : ICryptoService
         }
     }
 
-    private IEnumerable<TransactionModelBase> InitializeTransaction(string fileName, string entryData, Type transactionType)
+    private async Task InitializeTransaction(List<TransactionInformation> transactionInformations)
     {
-        TransactionModelBase data = (TransactionModelBase)FormatterServices.GetUninitializedObject(transactionType);
+        List<Task<List<ITransactionModel>>> transactions = new List<Task<List<ITransactionModel>>>();
 
-        return data.Init(fileName, entryData.Split(data.CSVSplit), ConvertTo);
+        foreach (TransactionInformation transactionInformation in transactionInformations)
+        {
+            transactions.Add(_createTransactions[transactionInformation.TransactionType].Invoke(transactionInformation.FileName, transactionInformation.EntryData, ConvertTo));
+        }
+
+        List<ITransactionModel>[] transactionModels =  await Task.WhenAll(transactions);
+
+        foreach (List<ITransactionModel> list in transactionModels)
+        {
+            foreach (ITransactionModel transaction in list)
+            {
+                if (!_transactions.ContainsKey(transaction.CryptoCurrency))
+                {
+                    _transactions.Add(transaction.CryptoCurrency, new List<ITransactionModel>());
+                }
+
+                _transactions[transaction.CryptoCurrency].Add(transaction);
+            }
+        }
+
+        foreach (KeyValuePair<string, List<ITransactionModel>> pair in _transactions)
+        {
+            pair.Value.Sort((x, y) => DateTime.Compare(x.TimeStamp, y.TimeStamp));
+        }
     }
 
     private object ConvertTo(string value, Type fieldType)

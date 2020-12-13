@@ -1,29 +1,27 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using System;
+﻿using System;
+using Newtonsoft.Json;
 
 namespace BinanceChain
 {
     [Serializable]
     public sealed class TransactionFromHash
     {
-        [SerializeField]
+        [JsonProperty]
         private int code;
 
-        [SerializeField]
+        [JsonProperty]
         private string hash;
 
-        [SerializeField]
+        [JsonProperty]
         private string height;
 
-        [SerializeField]
+        [JsonProperty]
         private string log;
 
-        [SerializeField]
+        [JsonProperty]
         private bool ok;
 
-        [SerializeField]
+        [JsonProperty]
         private TransactionTx tx;
 
         public int Code { get => code; }

@@ -3,9 +3,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using UnityEngine;
 
-public sealed class AtomicWalletModel : BlockChainTransactionModelBase
+public sealed class AtomicWalletModel : BlockChainTransactionModel
 {
     private const string SALE = "sale";
 
@@ -19,55 +20,50 @@ public sealed class AtomicWalletModel : BlockChainTransactionModelBase
 
     public override string WalletName => "Atomic wallet";
 
-    public override char CSVSplit => ';';
+    private AtomicWalletModel()
+    {
 
-    public override IEnumerable<TransactionModelBase> Init(string fileName, string[] entryData, Func<string, Type, object> convertFromString)
+    }
+
+    public static async Task<List<ITransactionModel>> InitializeFromData(string fileName, string entryData, Func<string, Type, object> convertFromString)
     {
         string[] coinIdSymbolAndAddress = fileName.Split('=');
 
-        if (coinIdSymbolAndAddress.Length < 3)
+        if (coinIdSymbolAndAddress.Length != 3)
         {
-            return Enumerable.Empty<TransactionModelBase>();
+            return new List<ITransactionModel>();
         }
         else
         {
-            return InternalInit(coinIdSymbolAndAddress[0].ToLower(), coinIdSymbolAndAddress[1].ToUpper(), coinIdSymbolAndAddress[2], entryData, convertFromString);
+            return await InternalInit(coinIdSymbolAndAddress[0].ToLower(), coinIdSymbolAndAddress[1].ToUpper(), coinIdSymbolAndAddress[2].Split('.')[0], entryData.Split(';'), convertFromString);
         }
     }
 
-    private IEnumerable<TransactionModelBase> InternalInit(string coinId, string coinSymbol, string address, string[] entryData, Func<string, Type, object> convertFromString)
+    private static async Task<List<ITransactionModel>> InternalInit(string coinId, string coinSymbol, string address, string[] entryData, Func<string, Type, object> convertFromString)
     {
-        _address = address;
-        _transactionId = entryData[0].RemoveQuotationMarks();
+        AtomicWalletModel atomicWalletModel = new AtomicWalletModel();
+        atomicWalletModel._address = address;
+        atomicWalletModel._transactionId = entryData[0].RemoveQuotationMarks();
 
-        CryptoCurrency = coinSymbol;
-        CryptoCurrencyAmount = (decimal)convertFromString.Invoke(entryData[4].RemoveQuotationMarks().RemoveWhiteSpaces(), typeof(decimal));
-
-        TimeStamp = (DateTime)convertFromString.Invoke(entryData[2].RemoveQuotationMarks().Remove(24), typeof(DateTime));
+        atomicWalletModel.CryptoCurrency = coinSymbol;
+        atomicWalletModel.TimeStamp = (DateTime)convertFromString.Invoke(entryData[2].RemoveQuotationMarks().Remove(24), typeof(DateTime));
 
         string transactionKind = entryData[3].ToLower().RemoveQuotationMarks();
 
         if (transactionKind == SALE)
         {
-            TransactionType = TransactionType.Sale;
+            atomicWalletModel.TransactionType = TransactionType.Sale;
         }
         else if (transactionKind == PURCHASE)
         {
-            TransactionType = TransactionType.Purchase;
+            atomicWalletModel.TransactionType = TransactionType.Purchase;
         }
 
         if (entryData[1].Contains(BINANCE_INDICATOR))
         {
-            _blockChainToCall = BlockChain.Binance;
+            atomicWalletModel._blockChainToCall = BlockChain.Binance;
         }
 
-        MainComponent.Instance.StartCoroutine(Init(coinId));
-
-        yield return this;
-    }
-
-    public override TransactionModelBase Clone()
-    {
-        return (AtomicWalletModel)MemberwiseClone();
+        return await atomicWalletModel.Init(coinId);
     }
 }

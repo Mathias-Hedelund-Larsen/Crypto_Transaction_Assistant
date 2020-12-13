@@ -1,6 +1,8 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 using UnityEngine;
 
 public class MainComponent : MonoBehaviour
@@ -13,22 +15,17 @@ public class MainComponent : MonoBehaviour
     private ICryptoService _cryptoService;
     private bool _runCalculations = false;
 
-    public Action OnLanguageChange { get; set; }
-
-    public string TargetCurrency { get { return _targetCurrency; } set { _targetCurrency = value; OnLanguageChange?.Invoke(); } }
+    public Func<Task> UpdateCurrencies { get; set; }
 
     public static MainComponent Instance { get; private set; }
 
     public CurrencyConvertionsContainer CurrencyConvertionsContainer => _currencyConvertionsContainer;
 
+    public string TargetCurrency { get => _targetCurrency; set => _targetCurrency = value; }
+
     private void Awake()
     {
         Instance = this;
-
-        if (File.Exists(Application.persistentDataPath + "/TestMap.txt"))
-        {
-            BinanceChain.TransactionFromHash tx = JsonUtility.FromJson<BinanceChain.TransactionFromHash>(File.ReadAllText(Application.persistentDataPath + "/TestMap.txt"));
-        }
 
         if(!Directory.Exists(Application.persistentDataPath + "/CryptoApplicationData"))
         {
@@ -37,7 +34,7 @@ public class MainComponent : MonoBehaviour
 
         if (File.Exists(CryptoService.CURRENCY_CONVERTIONS))
         {
-            _currencyConvertionsContainer = JsonUtility.FromJson<CurrencyConvertionsContainer>(File.ReadAllText(CryptoService.CURRENCY_CONVERTIONS));
+            _currencyConvertionsContainer = JsonConvert.DeserializeObject<CurrencyConvertionsContainer>(File.ReadAllText(CryptoService.CURRENCY_CONVERTIONS));
         }
         else
         {
@@ -52,14 +49,15 @@ public class MainComponent : MonoBehaviour
         Process.Start(CryptoService.TRANSACTIONS_FOLDER_PATH);
     }
 
-    public void Execute()
+    public async void Execute()
     {
+        await UpdateCurrencies.Invoke();
         _runCalculations = true;
     }
 
     private void Update()
     {
-        if (_runCalculations && !_cryptoService.IsAnyTransactionAwaitingData)
+        if (_runCalculations)
         {
             _cryptoService.RunCalculations();
 
@@ -71,7 +69,7 @@ public class MainComponent : MonoBehaviour
     {
         using (StreamWriter streamWriter = new StreamWriter(CryptoService.CURRENCY_CONVERTIONS))
         {
-            streamWriter.Write(JsonUtility.ToJson(_currencyConvertionsContainer));
+            streamWriter.Write(JsonConvert.SerializeObject(_currencyConvertionsContainer));
         }
     }
 }

@@ -1,15 +1,15 @@
-﻿using System;
-using UnityEngine;
+﻿using Newtonsoft.Json;
+using System;
 
 namespace BinanceChain
 {
     [Serializable]
     public sealed class TransactionInformationMessageValue
     {
-        [SerializeField]
+        [JsonProperty]
         private TransactionAddressAndCoins[] inputs;
 
-        [SerializeField]
+        [JsonProperty]
         private TransactionAddressAndCoins[] outputs;
 
         public TransactionAddressAndCoins[] Inputs { get => inputs; }

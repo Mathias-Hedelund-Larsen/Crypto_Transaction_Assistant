@@ -1,9 +1,9 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.Networking;
 using UnityEngine.UI;
 
 [RequireComponent(typeof(Dropdown))]
@@ -12,7 +12,7 @@ public sealed class CurrencyCodesDropdownInitializer : MonoBehaviour
     private Dropdown _dropdown;
     private List<string> _currencyCodes;
 
-    private void Start()
+    private async void Start()
     {
         _dropdown = GetComponent<Dropdown>();
 
@@ -20,52 +20,44 @@ public sealed class CurrencyCodesDropdownInitializer : MonoBehaviour
         {
             _currencyCodes = new List<string>(File.ReadAllText(CryptoService.CURRENCY_CODES_FILE_PATH).Split('\n'));
 
-            MainComponent.Instance.TargetCurrency = _currencyCodes[0];
+             MainComponent.Instance.TargetCurrency =_currencyCodes[0];
 
             _dropdown.options = _currencyCodes.Select(c => new Dropdown.OptionData(c)).ToList();
         }
         else
         {
-            StartCoroutine(GetApiCodes());
+           await GetApiCodes();
         }
     }
 
-    private IEnumerator GetApiCodes()
+    private async Task GetApiCodes()
     {
-        using (UnityWebRequest currencyCodesRequest = UnityWebRequest.Get($"https://openexchangerates.org/api/currencies.json"))
+        using (HttpClient httpClient = new HttpClient())
         {
-            yield return currencyCodesRequest.SendWebRequest();
+            string data = await httpClient.GetStringAsync($"https://openexchangerates.org/api/currencies.json");
 
-            if (currencyCodesRequest.isNetworkError)
+            string[] dataSplit = data.Split('\n');
+
+            _currencyCodes = new List<string>();
+
+            List<Dropdown.OptionData> options = new List<Dropdown.OptionData>();
+
+            for (int i = 0; i < dataSplit.Length; i++)
             {
+                if (dataSplit[i].Contains(":"))
+                {
+                    _currencyCodes.Add(dataSplit[i].Split(':')[0].Replace("\"", "").Trim());
+                }
             }
-            else
+
+            using (StreamWriter streamWriter = new StreamWriter(CryptoService.CURRENCY_CODES_FILE_PATH))
             {
-                string data = currencyCodesRequest.downloadHandler.text;
-
-                string[] dataSplit = data.Split('\n');
-
-                _currencyCodes = new List<string>();
-
-                List<Dropdown.OptionData> options = new List<Dropdown.OptionData>();
-
-                for (int i = 0; i < dataSplit.Length; i++)
-                {
-                    if (dataSplit[i].Contains(":"))
-                    {
-                        _currencyCodes.Add(dataSplit[i].Split(':')[0].Replace("\"", "").Trim());   
-                    }
-                }
-
-                using (StreamWriter streamWriter = new StreamWriter(CryptoService.CURRENCY_CODES_FILE_PATH))
-                {
-                    streamWriter.Write(string.Join("\n", _currencyCodes));
-                }
-
-                MainComponent.Instance.TargetCurrency = _currencyCodes[0];
-
-                _dropdown.options = _currencyCodes.Select(c => new Dropdown.OptionData(c)).ToList();
+                streamWriter.Write(string.Join("\n", _currencyCodes));
             }
+
+            MainComponent.Instance.TargetCurrency = _currencyCodes[0];
+
+            _dropdown.options = _currencyCodes.Select(c => new Dropdown.OptionData(c)).ToList();
         }
     }
 

@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
-public sealed class CelsiusWalletModel : TransactionModelBase
+public sealed class CelsiusWalletModel : TransactionModelBase<CelsiusWalletModel>
 {
     private static readonly string[] FULL_TAX = new string[]
     {
@@ -18,45 +19,46 @@ public sealed class CelsiusWalletModel : TransactionModelBase
 
     public override string WalletName => "Celsius wallet";
 
-    public override IEnumerable<TransactionModelBase> Init(string fileName, string[] entryData, Func<string, Type, object> convertFromString)
+    private CelsiusWalletModel() {}
+
+    public static async Task<List<ITransactionModel>> InitializeFromData(string fileName, string entryData, Func<string, Type, object> convertFromString)
     {
-        string transactionKind = entryData[2];
+        string[] dataSplit = entryData.Split(',');
+
+        string transactionKind = dataSplit[2];
 
         if (NON_TAXABLE_EVENTS.Contains(transactionKind))
         {
-            return Enumerable.Empty<TransactionModelBase>();
+            return new List<ITransactionModel>();
         }
 
-        return InternalInit(transactionKind, entryData, convertFromString);
+        return await InternalInit(transactionKind, dataSplit, convertFromString);
     }
 
-    private IEnumerable<TransactionModelBase> InternalInit(string transactionKind, string[] entryData, Func<string, Type, object> convertFromString)
+    private static async Task<List<ITransactionModel>> InternalInit(string transactionKind, string[] entryData, Func<string, Type, object> convertFromString)
     {
-        TimeStamp = (DateTime)convertFromString.Invoke(entryData[1], typeof(DateTime));
-        
-        CryptoCurrency = entryData[3];
-        CryptoCurrencyAmount = (decimal)convertFromString.Invoke(entryData[4], typeof(decimal));
+        CelsiusWalletModel celsiusWalletModel = new CelsiusWalletModel();
 
-        NativeCurrency = "USD";
-        NativeAmount = (decimal)convertFromString.Invoke(entryData[5], typeof(decimal));
+        celsiusWalletModel.TimeStamp = (DateTime)convertFromString.Invoke(entryData[1], typeof(DateTime));
+
+        celsiusWalletModel.CryptoCurrency = entryData[3];
+        celsiusWalletModel.CryptoCurrencyAmount = (decimal)convertFromString.Invoke(entryData[4], typeof(decimal));
+
+        celsiusWalletModel.NativeCurrency = "USD";
+        celsiusWalletModel.NativeAmount = (decimal)convertFromString.Invoke(entryData[5], typeof(decimal));
 
         if (FULL_TAX.Contains(transactionKind))
         {
-            TransactionType = TransactionType.Interest;
-            FullyTaxed = true;
+            celsiusWalletModel.TransactionType = TransactionType.Interest;
+            celsiusWalletModel.FullyTaxed = true;
         }
         else
         {
-            TransactionType = TransactionType.Purchase;
+            celsiusWalletModel.TransactionType = TransactionType.Purchase;
         }
 
-        yield return this;
+        await celsiusWalletModel.UpdateCurrency();
 
-        UpdateCurrency();
-    }
-
-    public override TransactionModelBase Clone()
-    {
-        return (TransactionModelBase)MemberwiseClone();
+        return new List<ITransactionModel> { celsiusWalletModel };
     }
 }

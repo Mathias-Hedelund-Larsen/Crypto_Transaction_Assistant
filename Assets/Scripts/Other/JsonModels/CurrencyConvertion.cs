@@ -1,43 +1,29 @@
-﻿using System;
-using System.Globalization;
-using UnityEngine;
+﻿using Newtonsoft.Json;
+using System;
 
 [Serializable]
 public sealed class CurrencyConvertion 
 {
-    [NonSerialized]
-    private bool _initialized = false;
-
-    [SerializeField]
+    [JsonProperty]
     private string _fromCurrency;
 
-    [SerializeField]
+    [JsonProperty]
     private string _toCurrency;
 
-    [SerializeField]
-    private JsonDateTime _dateOfConvertionRate;
+    [JsonProperty]
+    private decimal _convertionRate;
 
-    [SerializeField]
-    private string _convertionRateS;
+    [JsonProperty]
+    private DateTime _dateOfConvertionRate;
 
-    private decimal _convertionRate = decimal.MinValue;
-
+    [JsonIgnore]
     public string FromToCurrencies => _fromCurrency + "->" + _toCurrency;
 
-    public decimal ConvertionRate 
-    {
-        get 
-        {
-            if (!_initialized)
-            {
-                _convertionRate = decimal.Parse(_convertionRateS);
-            }
+    [JsonIgnore]
+    public decimal ConvertionRate  => _convertionRate;
 
-            return _convertionRate;
-        } 
-    }
-
-    public DateTime DateOfConvertionRate { get => _dateOfConvertionRate; }
+    [JsonIgnore]
+    public DateTime DateOfConvertionRate => _dateOfConvertionRate;
 
     public CurrencyConvertion(string fromCurrency, string toCurrency, DateTime dateOfConvertionRate, decimal convertionRate)
     {
@@ -45,7 +31,5 @@ public sealed class CurrencyConvertion
         _toCurrency = toCurrency;
         _dateOfConvertionRate = dateOfConvertionRate;
         _convertionRate = convertionRate;
-        _convertionRateS = convertionRate.ToString(CultureInfo.InvariantCulture);
-        _initialized = true;
     }
 }

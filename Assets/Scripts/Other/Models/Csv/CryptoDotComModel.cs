@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
-public sealed class CryptoDotComModel : TransactionModelBase
+public sealed class CryptoDotComModel : TransactionModelBase<CryptoDotComModel>
 {
     private const string VIBAN_PURCHASE = "viban_purchase";
 
@@ -48,90 +49,100 @@ public sealed class CryptoDotComModel : TransactionModelBase
 
     public override string WalletName => "CryptoDotCom";
 
-    public override IEnumerable<TransactionModelBase> Init(string fileName, string[] entryData, Func<string, Type, object> convertFromString)
-    {       
-        string transactionKind = entryData[9];
+    private CryptoDotComModel() {}
+
+    public static async Task<List<ITransactionModel>> InitializeFromData(string fileName, string entryData, Func<string, Type, object> convertFromString)
+    {
+        string[] dataSplit = entryData.Split(',');
+
+        string transactionKind = dataSplit[9];
 
         if (NON_TAXABLE_EVENTS.Contains(transactionKind))
         {
-            return Enumerable.Empty<TransactionModelBase>();
+            return new List<ITransactionModel>();
         }
 
-        return InternalInit(transactionKind, entryData, convertFromString);
+        return await InitializeFromData(transactionKind, dataSplit, convertFromString);
     }
 
-    private IEnumerable<TransactionModelBase> InternalInit(string transactionKind, string[] entryData, Func<string, Type, object> convertFromString)
+    private static async Task<List<ITransactionModel>> InitializeFromData(string transactionKind, string[] entryData, Func<string, Type, object> convertFromString)
     {
-        TimeStamp = (DateTime)convertFromString.Invoke(entryData[0], typeof(DateTime));
+        List<ITransactionModel> transactions = new List<ITransactionModel>();
+
+        CryptoDotComModel cryptoDotComModel = new CryptoDotComModel();
+
+        cryptoDotComModel.TimeStamp = (DateTime)convertFromString.Invoke(entryData[0], typeof(DateTime));
 
         if (transactionKind == VIBAN_PURCHASE)
         {
-            CryptoCurrency = entryData[4];
-            CryptoCurrencyAmount = (decimal)convertFromString.Invoke(entryData[5], typeof(decimal));
+            cryptoDotComModel.CryptoCurrency = entryData[4];
+            cryptoDotComModel.CryptoCurrencyAmount = (decimal)convertFromString.Invoke(entryData[5], typeof(decimal));
         }
         else
         {
-            CryptoCurrency = entryData[2];
-            CryptoCurrencyAmount = (decimal)convertFromString.Invoke(entryData[3], typeof(decimal));
+            cryptoDotComModel.CryptoCurrency = entryData[2];
+            cryptoDotComModel.CryptoCurrencyAmount = (decimal)convertFromString.Invoke(entryData[3], typeof(decimal));
         }
 
-        NativeCurrency = entryData[6];
-        NativeAmount = (decimal)convertFromString.Invoke(entryData[7], typeof(decimal));
+        cryptoDotComModel.NativeCurrency = entryData[6];
+        cryptoDotComModel.NativeAmount = (decimal)convertFromString.Invoke(entryData[7], typeof(decimal));
 
-        yield return this;
+        transactions.Add(cryptoDotComModel);
 
         if (REVERSION.Contains(transactionKind))
         {
-            TransactionType = TransactionType.Reversion;
+            cryptoDotComModel.TransactionType = TransactionType.Reversion;
         }
         else if (transactionKind == CRYPTO_EXHANGE)
         {
-            TransactionType = TransactionType.Sale;
+            cryptoDotComModel.TransactionType = TransactionType.Sale;
 
-            yield return SetupExchangeTransaction(entryData, convertFromString);
+            transactions.Add(await SetupExchangeTransaction(cryptoDotComModel, entryData, convertFromString));
         }
         else if (SALES.Contains(transactionKind))
         {
-            TransactionType = TransactionType.Sale;
+            cryptoDotComModel.TransactionType = TransactionType.Sale;
         }
         else
         {
-            TransactionType = TransactionType.Purchase;
+            cryptoDotComModel.TransactionType = TransactionType.Purchase;
 
             if (REBATES.Contains(transactionKind))
             {
-                TransactionType = TransactionType.Rebate;
+                cryptoDotComModel.TransactionType = TransactionType.Rebate;
             }
 
             if (FULL_TAX.Contains(transactionKind))
             {
                 if (transactionKind == FULL_TAX[0])
                 {
-                    TransactionType = TransactionType.Interest;
+                    cryptoDotComModel.TransactionType = TransactionType.Interest;
                 }
 
-                FullyTaxed = true;
+                cryptoDotComModel.FullyTaxed = true;
             }
         }
 
-        UpdateCurrency();
+        await cryptoDotComModel.UpdateCurrency();
+
+        return transactions;
     }
 
-    private CryptoDotComModel SetupExchangeTransaction(string[] entryData, Func<string, Type, object> convertFromString)
+    private static async Task<ITransactionModel> SetupExchangeTransaction(ITransactionModel original, string[] entryData, Func<string, Type, object> convertFromString)
     {
-        TransactionType = TransactionType.Sale;
-        CryptoCurrencyAmount *= -1;
+        original.TransactionType = TransactionType.Sale;
+        original.CryptoCurrencyAmount *= -1;
 
         CryptoDotComModel next = new CryptoDotComModel();
 
         string[] nEntryData = new string[] { entryData[4], entryData[5] };
 
-        next.InternalEnumerableInit(TimeStamp, NativeAmount, NativeCurrency, nEntryData, convertFromString);
+        await next.InternalInit(original.TimeStamp, original.NativeAmount, original.NativeCurrency, nEntryData, convertFromString);
 
         return next;
     }
 
-    private void InternalEnumerableInit(DateTime timeStamp, decimal nativeAmount, string nativeCurrency, string[] entryData, Func<string, Type, object> convertFromString)
+    private async Task InternalInit(DateTime timeStamp, decimal nativeAmount, string nativeCurrency, string[] entryData, Func<string, Type, object> convertFromString)
     {
         TransactionType = TransactionType.Purchase;
         TimeStamp = timeStamp;
@@ -140,11 +151,6 @@ public sealed class CryptoDotComModel : TransactionModelBase
         CryptoCurrency = entryData[0];
         CryptoCurrencyAmount = (decimal)convertFromString.Invoke(entryData[1], typeof(decimal));
 
-        UpdateCurrency();
-    }
-
-    public override TransactionModelBase Clone()
-    {
-        return (CryptoDotComModel)MemberwiseClone();
+        await UpdateCurrency();
     }
 }

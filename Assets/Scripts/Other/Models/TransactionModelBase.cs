@@ -1,35 +1,31 @@
 ﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine.Networking;
+using System.Net.Http;
+using System.Threading.Tasks;
 
-public abstract class TransactionModelBase
+
+public abstract class TransactionModelBase<T> : ITransactionModel where T : TransactionModelBase<T>
 {
     public const string CSV_DATA_ORDER = "Transaction ID,Date,Crypto currency, Crypto currency amount,Native currency,Native currency amount,Transaction type,Wallet name";
 
     private string _transactionId;
 
-    public DateTime TimeStamp { get; protected set; }
-
-    public bool IsAwatingData { get; protected set; }
+    public DateTime TimeStamp { get; set; }
 
     public decimal NativeAmount { get; set; }
 
-    public string NativeCurrency { get; protected set; }
+    public string NativeCurrency { get; set; }
 
-    public string CryptoCurrency { get; protected set; }
+    public string CryptoCurrency { get; set; }
 
     public decimal CryptoCurrencyAmount { get; set; }
 
-    public decimal ValueForOneCryptoTokenInNative { get; protected set; }
+    public decimal ValueForOneCryptoTokenInNative { get; set; }
 
-    public TransactionType TransactionType { get; protected set; }
+    public TransactionType TransactionType { get; set; }
 
-    public bool FullyTaxed { get; protected set; }
+    public bool FullyTaxed { get; set; }
 
     public abstract string WalletName { get; }
-
-    public virtual char CSVSplit => ',';
 
     public string TransactionId 
     { 
@@ -44,9 +40,7 @@ public abstract class TransactionModelBase
         }
     }
 
-    public abstract IEnumerable<TransactionModelBase> Init(string fileName, string[] entryData, Func<string, Type, object> convertFromString);
-
-    protected IEnumerator ConvertToNativeTarget(string nativeCurrency, decimal nativeAmount)
+    protected async Task ConvertToNativeTarget(string nativeCurrency, decimal nativeAmount)
     {
         CurrencyConvertion currencyConvertion = MainComponent.Instance.CurrencyConvertionsContainer[nativeCurrency + "->" + MainComponent.Instance.TargetCurrency, TimeStamp];
 
@@ -55,75 +49,59 @@ public abstract class TransactionModelBase
             NativeCurrency = MainComponent.Instance.TargetCurrency;
             NativeAmount = nativeAmount * currencyConvertion.ConvertionRate;
             ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
-            IsAwatingData = false;
         }
         else
         {
             string date = TimeStamp.ToString("yyyy-MM-dd");
 
-            using (UnityWebRequest exhangeWebRequest = UnityWebRequest.Get($"http://currencies.apps.grandtrunk.net/getrate/{date}/{nativeCurrency}/{MainComponent.Instance.TargetCurrency}"))
+            try
             {
-                yield return exhangeWebRequest.SendWebRequest();
+                using (HttpClient httpClient = new HttpClient())
+                {
+                    string exchangeRateText = await httpClient.GetStringAsync($"http://currencies.apps.grandtrunk.net/getrate/{date}/{nativeCurrency}/{MainComponent.Instance.TargetCurrency}");
 
-                if (exhangeWebRequest.isNetworkError)
-                {
-                }
-                else
-                {
-                    if (decimal.TryParse(exhangeWebRequest.downloadHandler.text, out decimal exchangeRate))
+                    if (decimal.TryParse(exchangeRateText, out decimal exchangeRate))
                     {
-                        MainComponent.Instance.CurrencyConvertionsContainer.Add(new CurrencyConvertion(nativeCurrency, MainComponent.Instance.TargetCurrency, TimeStamp, exchangeRate));
+                        lock (MainComponent.Instance)
+                        {
+                            if (!MainComponent.Instance.CurrencyConvertionsContainer.ContainsKey(nativeCurrency + "->" + MainComponent.Instance.TargetCurrency, TimeStamp))
+                            {
+                                MainComponent.Instance.CurrencyConvertionsContainer.Add(new CurrencyConvertion(nativeCurrency, MainComponent.Instance.TargetCurrency, TimeStamp, exchangeRate));
+                            }
+                        }
 
                         NativeCurrency = MainComponent.Instance.TargetCurrency;
                         NativeAmount = nativeAmount * exchangeRate;
                         ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
-                        IsAwatingData = false;
                     }
                 }
+            }
+            catch (Exception e)
+            {
+                //Write to screen too many transactions to get convertions for, please change ip or something, for api to let you get more data. Data is chached in files for later use.
             }
         }
     }
 
-    public abstract TransactionModelBase Clone();
-
-    protected void UpdateCurrency()
+    protected async Task UpdateCurrency()
     {
-        MainComponent.Instance.OnLanguageChange -= UpdateCurrency;
+        MainComponent.Instance.UpdateCurrencies -= UpdateCurrency;
 
-        if (IsAwatingData)
-        {
-            MainComponent.Instance.StartCoroutine(AwaitData());
-        }
-        else
-        {
-            NativCurrencyToTargetCurrency();
-        }
+        await NativeCurrencyToTargetCurrency();
         
-        MainComponent.Instance.OnLanguageChange += UpdateCurrency;
+        MainComponent.Instance.UpdateCurrencies += UpdateCurrency;
     }
 
-    private void NativCurrencyToTargetCurrency()
+    private async Task NativeCurrencyToTargetCurrency()
     {
         if (NativeCurrency != MainComponent.Instance.TargetCurrency)
         {
-            IsAwatingData = true;
-            MainComponent.Instance.StartCoroutine(ConvertToNativeTarget(NativeCurrency, NativeAmount));
+            await ConvertToNativeTarget(NativeCurrency, NativeAmount);
         }
         else
         {
-            IsAwatingData = false;
             ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
         }
-    }
-
-    private IEnumerator AwaitData()
-    {
-        while (IsAwatingData)
-        {
-            yield return null;
-        }
-
-        NativCurrencyToTargetCurrency();
     }
 
     public override string ToString()

@@ -1,12 +1,12 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using UnityEngine;
 
 [Serializable]
 public sealed class CurrencyConvertionsContainer 
 {
-    [SerializeField]
+    [JsonProperty]
     private List<CurrencyConvertion> _currencyConvertions = new List<CurrencyConvertion>();
 
     [NonSerialized]
@@ -33,6 +33,18 @@ public sealed class CurrencyConvertionsContainer
         {
             _fromToCurrencies = _currencyConvertions.GroupBy(c => c.FromToCurrencies).ToDictionary(c => c.Key, c => c.ToList());
         }
+    }
+
+    public bool ContainsKey(string key, DateTime date)
+    {
+        Init();
+
+        if (_fromToCurrencies.ContainsKey(key))
+        {
+            return _fromToCurrencies[key].Any(c => c.DateOfConvertionRate == date);
+        }
+
+        return false;
     }
 
     public void Add(CurrencyConvertion currencyConvertion)
