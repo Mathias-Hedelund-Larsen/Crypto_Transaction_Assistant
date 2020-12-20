@@ -57,7 +57,7 @@ public sealed class CelsiusWalletModel : TransactionModelBase<CelsiusWalletModel
             celsiusWalletModel.TransactionType = TransactionType.Purchase;
         }
 
-        await celsiusWalletModel.UpdateCurrency();
+        celsiusWalletModel.AddUpdateCurrency();
 
         return new List<ITransactionModel> { celsiusWalletModel };
     }

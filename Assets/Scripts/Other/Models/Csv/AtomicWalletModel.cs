@@ -12,6 +12,8 @@ public sealed class AtomicWalletModel : BlockChainTransactionModel
 
     private const string PURCHASE = "purchase";
 
+    private static List<string> _ethAddressesAdded = new List<string>();
+
     private static readonly string[] NON_TAXABLE_EVENTS = new string[]
     {
         "Incoming",
@@ -62,6 +64,17 @@ public sealed class AtomicWalletModel : BlockChainTransactionModel
         if (entryData[1].Contains(BINANCE_INDICATOR))
         {
             atomicWalletModel._blockChainToCall = BlockChain.Binance;
+        }
+        else if (entryData[1].Contains(ETHEREUM_INDICATOR))
+        {
+            atomicWalletModel._blockChainToCall = BlockChain.Ethereum;
+
+            if (_ethAddressesAdded.Contains(address))
+            {
+                return new List<ITransactionModel>();
+            }
+
+            _ethAddressesAdded.Add(address);
         }
 
         return await atomicWalletModel.Init(coinId);

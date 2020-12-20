@@ -3,15 +3,15 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Runtime.Serialization;
 using System.Threading.Tasks;
 using UnityEngine;
 
 public sealed class CryptoService : ICryptoService
 {
     public readonly static string TRANSACTIONS_FOLDER_PATH = Application.persistentDataPath + "/Crypto_Transactions";
-    public readonly static string CURRENCY_CONVERTIONS = Application.persistentDataPath + "/CryptoApplicationData/CurrencyConvertions.Json";
+    public readonly static string CURRENCY_CONVERTIONS_PATH = Application.persistentDataPath + "/CryptoApplicationData/CurrencyConvertions.Json";
     public readonly static string CURRENCY_CODES_FILE_PATH = Application.persistentDataPath + "/CryptoApplicationData/CurrencyCodes.txt";
+    public readonly static string TRANSACTIONS_TRACKING_PATH = TRANSACTIONS_FOLDER_PATH + "/TransactionsTracking.Json";
 
     private readonly static string[] SUPPORTED_TRANSACTIONS_FORMAT_PATHS = new string[]
     {
@@ -33,6 +33,7 @@ public sealed class CryptoService : ICryptoService
         _createTransactions.Add(typeof(CryptoDotComModel), CryptoDotComModel.InitializeFromData);
         _createTransactions.Add(typeof(CelsiusWalletModel), CelsiusWalletModel.InitializeFromData);
         _createTransactions.Add(typeof(AtomicWalletModel), AtomicWalletModel.InitializeFromData);
+        _createTransactions.Add(typeof(BlockChainTransactionModel), BlockChainTransactionModel.InitFromData);
 
         GenerateFolders();
 
@@ -72,7 +73,7 @@ public sealed class CryptoService : ICryptoService
             }
         }
 
-        InitializeTransaction(transactionInformations).Wait();
+        Task.Run(() => InitializeTransaction(transactionInformations)).Wait();
     }
 
     private void GenerateReadMeInFolders()

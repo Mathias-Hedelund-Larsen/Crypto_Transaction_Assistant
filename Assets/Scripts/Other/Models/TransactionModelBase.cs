@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Net.Http;
 using System.Threading.Tasks;
-
+using UnityEngine;
 
 public abstract class TransactionModelBase<T> : ITransactionModel where T : TransactionModelBase<T>
 {
@@ -79,17 +79,14 @@ public abstract class TransactionModelBase<T> : ITransactionModel where T : Tran
             catch (Exception e)
             {
                 //Write to screen too many transactions to get convertions for, please change ip or something, for api to let you get more data. Data is chached in files for later use.
+                Debug.Log(e);
             }
         }
     }
 
-    protected async Task UpdateCurrency()
-    {
-        MainComponent.Instance.UpdateCurrencies -= UpdateCurrency;
-
-        await NativeCurrencyToTargetCurrency();
-        
-        MainComponent.Instance.UpdateCurrencies += UpdateCurrency;
+    protected void AddUpdateCurrency()
+    {       
+        MainComponent.Instance.UpdateCurrencies += NativeCurrencyToTargetCurrency;
     }
 
     private async Task NativeCurrencyToTargetCurrency()

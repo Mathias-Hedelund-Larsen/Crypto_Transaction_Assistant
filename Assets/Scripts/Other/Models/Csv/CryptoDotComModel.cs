@@ -123,7 +123,7 @@ public sealed class CryptoDotComModel : TransactionModelBase<CryptoDotComModel>
             }
         }
 
-        await cryptoDotComModel.UpdateCurrency();
+        cryptoDotComModel.AddUpdateCurrency();
 
         return transactions;
     }
@@ -151,6 +151,6 @@ public sealed class CryptoDotComModel : TransactionModelBase<CryptoDotComModel>
         CryptoCurrency = entryData[0];
         CryptoCurrencyAmount = (decimal)convertFromString.Invoke(entryData[1], typeof(decimal));
 
-        await UpdateCurrency();
+        AddUpdateCurrency();
     }
 }

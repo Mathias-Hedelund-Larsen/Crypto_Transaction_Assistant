@@ -14,7 +14,7 @@ public class MainComponent : MonoBehaviour
 
     private ICryptoService _cryptoService;
     private bool _runCalculations = false;
-
+    private TransactionTracking _transactionTracking;
     public Func<Task> UpdateCurrencies { get; set; }
 
     public static MainComponent Instance { get; private set; }
@@ -32,9 +32,9 @@ public class MainComponent : MonoBehaviour
             Directory.CreateDirectory(Application.persistentDataPath + "/CryptoApplicationData");
         }
 
-        if (File.Exists(CryptoService.CURRENCY_CONVERTIONS))
+        if (File.Exists(CryptoService.CURRENCY_CONVERTIONS_PATH))
         {
-            _currencyConvertionsContainer = JsonConvert.DeserializeObject<CurrencyConvertionsContainer>(File.ReadAllText(CryptoService.CURRENCY_CONVERTIONS));
+            _currencyConvertionsContainer = JsonConvert.DeserializeObject<CurrencyConvertionsContainer>(File.ReadAllText(CryptoService.CURRENCY_CONVERTIONS_PATH));
         }
         else
         {
@@ -44,14 +44,19 @@ public class MainComponent : MonoBehaviour
         _cryptoService = new CryptoService();
     }
 
+    public void AddTransactionTracking(TransactionTracking transactionTracking)
+    {
+        _transactionTracking = transactionTracking;
+    }
+
     public void OpenTransactionsFolder()
     {
         Process.Start(CryptoService.TRANSACTIONS_FOLDER_PATH);
     }
 
-    public async void Execute()
+    public void Execute()
     {
-        await UpdateCurrencies.Invoke();
+        Task.Run(() => UpdateCurrencies.Invoke()).Wait();
         _runCalculations = true;
     }
 
@@ -67,9 +72,14 @@ public class MainComponent : MonoBehaviour
 
     private void OnDestroy()
     {
-        using (StreamWriter streamWriter = new StreamWriter(CryptoService.CURRENCY_CONVERTIONS))
+        using (StreamWriter streamWriter = new StreamWriter(CryptoService.CURRENCY_CONVERTIONS_PATH))
         {
             streamWriter.Write(JsonConvert.SerializeObject(_currencyConvertionsContainer));
+        }
+
+        using (StreamWriter streamWriter = new StreamWriter(CryptoService.TRANSACTIONS_TRACKING_PATH))
+        {
+            streamWriter.Write(JsonConvert.SerializeObject(_transactionTracking));
         }
     }
 }
