@@ -102,6 +102,11 @@ public sealed class CryptoDotComModel : TransactionModelBase<CryptoDotComModel>
         else if (SALES.Contains(transactionKind))
         {
             cryptoDotComModel.TransactionType = TransactionType.Sale;
+
+            if(cryptoDotComModel.CryptoCurrencyAmount < 0)
+            {
+                cryptoDotComModel.CryptoCurrencyAmount *= -1;
+            }
         }
         else
         {

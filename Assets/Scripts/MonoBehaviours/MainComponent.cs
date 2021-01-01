@@ -41,6 +41,12 @@ public class MainComponent : MonoBehaviour
             _currencyConvertionsContainer = new CurrencyConvertionsContainer();
         }
 
+        var list = new System.Collections.Generic.List<AddressInfo>();
+        list.Add(new AddressInfo("test", BlockChain.Binance, new System.Collections.Generic.List<TransactionIdAndType> { new TransactionIdAndType("tx", TransactionType.Purchase) }));
+        var data = JsonConvert.SerializeObject(new TransactionTracking(list));
+
+        UnityEngine.Debug.Log(data);
+
         _cryptoService = new CryptoService();
     }
 

@@ -42,44 +42,46 @@ public abstract class TransactionModelBase<T> : ITransactionModel where T : Tran
 
     protected async Task ConvertToNativeTarget(string nativeCurrency, decimal nativeAmount)
     {
-        CurrencyConvertion currencyConvertion = MainComponent.Instance.CurrencyConvertionsContainer[nativeCurrency + "->" + MainComponent.Instance.TargetCurrency, TimeStamp];
-
-        if (currencyConvertion != null)
+        if (CryptoCurrencyAmount != 0)
         {
-            NativeCurrency = MainComponent.Instance.TargetCurrency;
-            NativeAmount = nativeAmount * currencyConvertion.ConvertionRate;
-            ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
-        }
-        else
-        {
-            string date = TimeStamp.ToString("yyyy-MM-dd");
+            CurrencyConvertion currencyConvertion = MainComponent.Instance.CurrencyConvertionsContainer[nativeCurrency + "->" + MainComponent.Instance.TargetCurrency, TimeStamp];
 
-            try
+            if (currencyConvertion != null)
             {
-                using (HttpClient httpClient = new HttpClient())
+                NativeCurrency = MainComponent.Instance.TargetCurrency;
+                NativeAmount = nativeAmount * currencyConvertion.ConvertionRate;
+                ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
+            }
+            else
+            {
+                string date = TimeStamp.ToString("yyyy-MM-dd");
+
+                using (CallRateLimiter httpClient = new CallRateLimiter("Grandtrunk-Currencies", 5, TimeSpan.FromSeconds(1)))
                 {
-                    string exchangeRateText = await httpClient.GetStringAsync($"http://currencies.apps.grandtrunk.net/getrate/{date}/{nativeCurrency}/{MainComponent.Instance.TargetCurrency}");
+                    HttpResponseMessage httpResponse = await httpClient.GetDataAsync($"http://currencies.apps.grandtrunk.net/getrate/{date}/{nativeCurrency}/{MainComponent.Instance.TargetCurrency}");
 
-                    if (decimal.TryParse(exchangeRateText, out decimal exchangeRate))
+                    if (httpResponse.IsSuccessStatusCode)
                     {
-                        lock (MainComponent.Instance)
+                        if (decimal.TryParse(await httpResponse.Content.ReadAsStringAsync(), out decimal exchangeRate))
                         {
-                            if (!MainComponent.Instance.CurrencyConvertionsContainer.ContainsKey(nativeCurrency + "->" + MainComponent.Instance.TargetCurrency, TimeStamp))
+                            lock (MainComponent.Instance)
                             {
-                                MainComponent.Instance.CurrencyConvertionsContainer.Add(new CurrencyConvertion(nativeCurrency, MainComponent.Instance.TargetCurrency, TimeStamp, exchangeRate));
+                                if (!MainComponent.Instance.CurrencyConvertionsContainer.ContainsKey(nativeCurrency + "->" + MainComponent.Instance.TargetCurrency, TimeStamp))
+                                {
+                                    MainComponent.Instance.CurrencyConvertionsContainer.Add(new CurrencyConvertion(nativeCurrency, MainComponent.Instance.TargetCurrency, TimeStamp, exchangeRate));
+                                }
                             }
-                        }
 
-                        NativeCurrency = MainComponent.Instance.TargetCurrency;
-                        NativeAmount = nativeAmount * exchangeRate;
-                        ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
+                            NativeCurrency = MainComponent.Instance.TargetCurrency;
+                            NativeAmount = nativeAmount * exchangeRate;
+                            ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
+                        }
+                    }
+                    else
+                    {
+
                     }
                 }
-            }
-            catch (Exception e)
-            {
-                //Write to screen too many transactions to get convertions for, please change ip or something, for api to let you get more data. Data is chached in files for later use.
-                Debug.Log(e);
             }
         }
     }
@@ -97,12 +99,32 @@ public abstract class TransactionModelBase<T> : ITransactionModel where T : Tran
         }
         else
         {
-            ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
+            if (CryptoCurrencyAmount != 0)
+            {
+                ValueForOneCryptoTokenInNative = NativeAmount / CryptoCurrencyAmount;
+            }
         }
     }
 
     public override string ToString()
     {
         return TransactionId + "," + TimeStamp + "," + CryptoCurrency + "," + CryptoCurrencyAmount + "," + NativeCurrency + "," + NativeAmount + "," + TransactionType + "," + WalletName;
+    }
+
+    public int CompareTo(ITransactionModel other)
+    {
+        int date = DateTime.Compare(TimeStamp, other.TimeStamp);
+
+        if(date == 0)
+        {
+            if(TransactionType == TransactionType.Purchase)
+            {
+                return -1;
+            }
+
+            return 1;
+        }
+
+        return date;
     }
 }

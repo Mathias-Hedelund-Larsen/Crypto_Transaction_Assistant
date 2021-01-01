@@ -6,11 +6,12 @@ using System.Collections.Generic;
 public sealed class TransactionTracking 
 {
     [JsonProperty]
-    private readonly Dictionary<AddressAndChain, List<TransactionIdAndType>> _transactionHistory;
+    private readonly List<AddressInfo> _transactionHistory;
 
-    public Dictionary<AddressAndChain, List<TransactionIdAndType>> TransactionHistory { get => _transactionHistory; }
+    [JsonIgnore]
+    public List<AddressInfo> TransactionHistory { get => _transactionHistory; }
 
-    public TransactionTracking(Dictionary<AddressAndChain, List<TransactionIdAndType>> transactionHistory)
+    public TransactionTracking(List<AddressInfo> transactionHistory)
     {
         _transactionHistory = transactionHistory;
     }

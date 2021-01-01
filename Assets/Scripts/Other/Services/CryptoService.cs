@@ -17,7 +17,6 @@ public sealed class CryptoService : ICryptoService
     {
         TRANSACTIONS_FOLDER_PATH + "/CryptoDotCom",
         TRANSACTIONS_FOLDER_PATH + "/Celsius",
-        TRANSACTIONS_FOLDER_PATH + "/AtomicWallet",
         TRANSACTIONS_FOLDER_PATH + "/CoinBase"
     };
 
@@ -32,7 +31,6 @@ public sealed class CryptoService : ICryptoService
 
         _createTransactions.Add(typeof(CryptoDotComModel), CryptoDotComModel.InitializeFromData);
         _createTransactions.Add(typeof(CelsiusWalletModel), CelsiusWalletModel.InitializeFromData);
-        _createTransactions.Add(typeof(AtomicWalletModel), AtomicWalletModel.InitializeFromData);
         _createTransactions.Add(typeof(BlockChainTransactionModel), BlockChainTransactionModel.InitFromData);
 
         GenerateFolders();
@@ -59,7 +57,6 @@ public sealed class CryptoService : ICryptoService
             }
             else if (directoryPath == SUPPORTED_TRANSACTIONS_FORMAT_PATHS[2])
             {
-                modelType = typeof(AtomicWalletModel);
             }
 
             foreach (string filePath in filePaths)
@@ -180,6 +177,32 @@ public sealed class CryptoService : ICryptoService
 
             purchaseTransactions.Clear();
         }
+
+        _gains.Sort((x, y) => DateTime.Compare(x.PurchaseDate, y.PurchaseDate));
+        _losses.Sort((x, y) => DateTime.Compare(x.PurchaseDate, y.PurchaseDate));
+
+        if (_gains.Count > 0)
+        {
+            _gains[0].TotalAmount = _gains[0].Amount;
+
+            for (int i = 1; i < _gains.Count; i++)
+            {
+                _gains[i].TotalAmount = _gains[i].Amount + _gains[i - 1].TotalAmount;
+            }
+        }
+
+        if (_losses.Count > 0)
+        {
+            _losses[0].TotalAmount = _losses[0].Amount;
+
+            for (int i = 1; i < _losses.Count; i++)
+            {
+                _losses[i].TotalAmount = _losses[i].Amount + _losses[i - 1].TotalAmount;
+            }
+        }
+
+        WriteTansactionGains();
+        WriteTranactionLosses();
     }
 
     private void HandleReversions()
@@ -232,34 +255,13 @@ public sealed class CryptoService : ICryptoService
 
             if (transactionProfit < 0)
             {
-                if (_losses.Count > 0)
-                {
-                    _losses.Add(new TaxableEvent(transaction.TransactionId, saleTransaction.TransactionId, transaction.TimeStamp, transactionProfit, MainComponent.Instance.TargetCurrency,
-                        _losses[_losses.Count - 1].TotalAmount + transactionProfit));
-                }
-                else
-                {
-                    _losses.Add(new TaxableEvent(transaction.TransactionId, saleTransaction.TransactionId, transaction.TimeStamp, transactionProfit, MainComponent.Instance.TargetCurrency,
-                        transactionProfit));
-                }
+                _losses.Add(new TaxableEvent(transaction.TransactionId, saleTransaction.TransactionId, transaction.TimeStamp, saleTransaction.TimeStamp, transactionProfit, MainComponent.Instance.TargetCurrency));
             }
             else if (transactionProfit > 0)
             {
-                if (_gains.Count > 0)
-                {
-                    _gains.Add(new TaxableEvent(transaction.TransactionId, saleTransaction.TransactionId, transaction.TimeStamp, transactionProfit, MainComponent.Instance.TargetCurrency,
-                        _gains[_gains.Count - 1].TotalAmount + transactionProfit));
-                }
-                else
-                {
-                    _gains.Add(new TaxableEvent(transaction.TransactionId, saleTransaction.TransactionId, transaction.TimeStamp, transactionProfit, MainComponent.Instance.TargetCurrency,
-                        transactionProfit));
-                }
+                _gains.Add(new TaxableEvent(transaction.TransactionId, saleTransaction.TransactionId, transaction.TimeStamp, saleTransaction.TimeStamp, transactionProfit, MainComponent.Instance.TargetCurrency));
             }
         }
-
-        WriteTansactionGains();
-        WriteTranactionLosses();
     }
 
     private void WriteTansactionGains()
@@ -314,7 +316,7 @@ public sealed class CryptoService : ICryptoService
 
         foreach (KeyValuePair<string, List<ITransactionModel>> pair in _transactions)
         {
-            pair.Value.Sort((x, y) => DateTime.Compare(x.TimeStamp, y.TimeStamp));
+            pair.Value.Sort((x, y) => x.CompareTo(y));
         }
     }
 
