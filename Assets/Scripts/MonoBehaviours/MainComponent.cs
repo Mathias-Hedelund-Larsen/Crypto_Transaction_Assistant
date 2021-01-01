@@ -1,19 +1,28 @@
 ﻿using Newtonsoft.Json;
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class MainComponent : MonoBehaviour
 {
     [SerializeField]
     private string _targetCurrency = "DKK";
 
+    [SerializeField]
+    private Dropdown _culture;
+
+    [SerializeField]
+    private bool _isExecuting;
+
     private CurrencyConvertionsContainer _currencyConvertionsContainer;
 
     private ICryptoService _cryptoService;
-    private bool _runCalculations = false;
+    private CultureInfo[] _cultures;
     private TransactionTracking _transactionTracking;
     public Func<Task> UpdateCurrencies { get; set; }
 
@@ -22,6 +31,7 @@ public class MainComponent : MonoBehaviour
     public CurrencyConvertionsContainer CurrencyConvertionsContainer => _currencyConvertionsContainer;
 
     public string TargetCurrency { get => _targetCurrency; set => _targetCurrency = value; }
+    public CultureInfo CurrentCulture { get; private set; }
 
     private void Awake()
     {
@@ -41,13 +51,21 @@ public class MainComponent : MonoBehaviour
             _currencyConvertionsContainer = new CurrencyConvertionsContainer();
         }
 
-        var list = new System.Collections.Generic.List<AddressInfo>();
-        list.Add(new AddressInfo("test", BlockChain.Binance, new System.Collections.Generic.List<TransactionIdAndType> { new TransactionIdAndType("tx", TransactionType.Purchase) }));
-        var data = JsonConvert.SerializeObject(new TransactionTracking(list));
-
-        UnityEngine.Debug.Log(data);
-
         _cryptoService = new CryptoService();
+
+        _cultures = CultureInfo.GetCultures(CultureTypes.AllCultures);
+
+        Array.Sort(_cultures, (x, y) => x.Name.CompareTo(y.Name));
+
+        _culture.AddOptions(_cultures.Select(c => new Dropdown.OptionData(c.Name)).ToList());
+        CurrentCulture = CultureInfo.CurrentCulture;
+
+        _culture.value = Array.IndexOf(_cultures, CurrentCulture);
+    }
+
+    public void UpdateCulture(int index)
+    {
+        CurrentCulture = _cultures[index];
     }
 
     public void AddTransactionTracking(TransactionTracking transactionTracking)
@@ -62,18 +80,21 @@ public class MainComponent : MonoBehaviour
 
     public void Execute()
     {
-        Task.Run(() => UpdateCurrencies.Invoke()).Wait();
-        _runCalculations = true;
+        if (!_isExecuting)
+        {
+            _isExecuting = true;
+
+            Task.Run(() => UpdateCurrencies.Invoke()).ContinueWith(RunCalculations);
+        }
     }
 
-    private void Update()
+    private async void RunCalculations(Task currencyTask)
     {
-        if (_runCalculations)
-        {
-            _cryptoService.RunCalculations();
+        await currencyTask;
 
-            _runCalculations = false;
-        }
+        await Task.Run(_cryptoService.RunCalculations);
+
+        _isExecuting = false;
     }
 
     private void OnDestroy()

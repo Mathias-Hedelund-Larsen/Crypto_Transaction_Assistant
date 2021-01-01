@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-public sealed class CelsiusWalletModel : TransactionModelBase<CelsiusWalletModel>
+public sealed class CelsiusWalletModel : TransactionModelBase
 {
     private static readonly string[] FULL_TAX = new string[]
     {
@@ -50,7 +50,7 @@ public sealed class CelsiusWalletModel : TransactionModelBase<CelsiusWalletModel
         if (FULL_TAX.Contains(transactionKind))
         {
             celsiusWalletModel.TransactionType = TransactionType.Interest;
-            celsiusWalletModel.FullyTaxed = true;
+            celsiusWalletModel.IsFullyTaxed = true;
         }
         else
         {
@@ -60,5 +60,10 @@ public sealed class CelsiusWalletModel : TransactionModelBase<CelsiusWalletModel
         celsiusWalletModel.AddUpdateCurrency();
 
         return new List<ITransactionModel> { celsiusWalletModel };
+    }
+
+    public override ITransactionModel Clone()
+    {
+        return (CelsiusWalletModel)MemberwiseClone();
     }
 }

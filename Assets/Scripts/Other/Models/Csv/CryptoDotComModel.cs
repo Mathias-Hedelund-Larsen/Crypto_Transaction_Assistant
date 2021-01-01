@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-public sealed class CryptoDotComModel : TransactionModelBase<CryptoDotComModel>
+public sealed class CryptoDotComModel : TransactionModelBase
 {
     private const string VIBAN_PURCHASE = "viban_purchase";
 
@@ -18,7 +18,10 @@ public sealed class CryptoDotComModel : TransactionModelBase<CryptoDotComModel>
     private static readonly string[] SALES = new string[]
     {
         "card_top_up",
-        "dust_conversion_debited"
+        "dust_conversion_debited",
+        "crypto_wallet_swap_debited",
+        "crypto_payment",
+        "dynamic_coin_swap_debited"
     };
 
     private static readonly string[] REVERSION = new string[]
@@ -31,12 +34,14 @@ public sealed class CryptoDotComModel : TransactionModelBase<CryptoDotComModel>
     {
         "lockup_lock",
         "crypto_withdrawal",
-        "crypto_deposit",
         "supercharger_deposit",
         "supercharger_withdrawal",
         "crypto_to_exchange_transfer",
         "exchange_to_crypto_transfer",
-        "lockup_upgrade"
+        "lockup_upgrade",
+        "crypto_earn_program_created",
+        "dynamic_coin_swap_bonus_exchange_deposit",
+        "lockup_swap_debited"
     };
 
     private static readonly string[] FULL_TAX = new string[]
@@ -103,10 +108,7 @@ public sealed class CryptoDotComModel : TransactionModelBase<CryptoDotComModel>
         {
             cryptoDotComModel.TransactionType = TransactionType.Sale;
 
-            if(cryptoDotComModel.CryptoCurrencyAmount < 0)
-            {
-                cryptoDotComModel.CryptoCurrencyAmount *= -1;
-            }
+            cryptoDotComModel.ApplyNonNegative();
         }
         else
         {
@@ -124,7 +126,7 @@ public sealed class CryptoDotComModel : TransactionModelBase<CryptoDotComModel>
                     cryptoDotComModel.TransactionType = TransactionType.Interest;
                 }
 
-                cryptoDotComModel.FullyTaxed = true;
+                cryptoDotComModel.IsFullyTaxed = true;
             }
         }
 
@@ -133,10 +135,11 @@ public sealed class CryptoDotComModel : TransactionModelBase<CryptoDotComModel>
         return transactions;
     }
 
-    private static async Task<ITransactionModel> SetupExchangeTransaction(ITransactionModel original, string[] entryData, Func<string, Type, object> convertFromString)
+    private static async Task<ITransactionModel> SetupExchangeTransaction(CryptoDotComModel original, string[] entryData, Func<string, Type, object> convertFromString)
     {
         original.TransactionType = TransactionType.Sale;
-        original.CryptoCurrencyAmount *= -1;
+
+        original.ApplyNonNegative();
 
         CryptoDotComModel next = new CryptoDotComModel();
 
@@ -157,5 +160,10 @@ public sealed class CryptoDotComModel : TransactionModelBase<CryptoDotComModel>
         CryptoCurrencyAmount = (decimal)convertFromString.Invoke(entryData[1], typeof(decimal));
 
         AddUpdateCurrency();
+    }
+
+    public override ITransactionModel Clone()
+    {
+        return (CryptoDotComModel)MemberwiseClone();
     }
 }

@@ -16,11 +16,13 @@ public interface ITransactionModel
 
     TransactionType TransactionType { get; set; }
 
-    bool FullyTaxed { get; set; }
+    bool IsFullyTaxed { get; set; }
 
     string WalletName { get; }
 
     string TransactionId { get; }
 
     int CompareTo(ITransactionModel other);
+
+    ITransactionModel Clone();
 }

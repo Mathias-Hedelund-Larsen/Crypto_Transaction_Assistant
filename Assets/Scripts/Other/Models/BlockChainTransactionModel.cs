@@ -8,7 +8,7 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using UnityEngine;
 
-public sealed class BlockChainTransactionModel : TransactionModelBase<BlockChainTransactionModel>
+public sealed class BlockChainTransactionModel : TransactionModelBase
 {
     private static readonly string API_KEYS_PATH = CryptoService.TRANSACTIONS_FOLDER_PATH + "/BlockChainSpecific/APIKeys.json";
 
@@ -20,7 +20,7 @@ public sealed class BlockChainTransactionModel : TransactionModelBase<BlockChain
     private string _address;
     private string _transactionId;
 
-    public override string WalletName => "No Wallet Indicated";
+    public override string WalletName => "Transactions from blockchain";
 
     private BlockChainTransactionModel()
     {
@@ -33,6 +33,8 @@ public sealed class BlockChainTransactionModel : TransactionModelBase<BlockChain
 
         foreach (AddressInfo addressInfo in transactionTracking.TransactionHistory)
         {
+
+
             foreach (TransactionIdAndType markedTransaction in addressInfo.MarkedTransactions)
             {
                 //value.TransactionType
@@ -86,67 +88,74 @@ public sealed class BlockChainTransactionModel : TransactionModelBase<BlockChain
         return new List<ITransactionModel>();
     }
 
-    private async Task<List<ITransactionModel>> InitFromBinanceApi()
-    {
-        List<ITransactionModel> transactionModels = new List<ITransactionModel> { this };
+    //private static async Task<List<ITransactionModel>> InitFromBinanceApi(string address)
+    //{
+    //    using(CallRateLimiter explorerBinanceLimiter = new CallRateLimiter("BinanceExplorerApi", 10, TimeSpan.FromSeconds(1)))
+    //    {
+    //        HttpResponseMessage transactionsAmount = await explorerBinanceLimiter.GetDataAsync($"https://explorer.binance.org/api/v1/txs?page=1&rows=1&address={address}");
 
-        using (CallRateLimiter apiCallRateLimiter = new CallRateLimiter("BinanceApiCall", 10, TimeSpan.FromSeconds(1)))
-        {
-            HttpResponseMessage httpResponse = await apiCallRateLimiter.GetDataAsync($"https://dex.binance.org/api/v1/tx/{_transactionId}?format=json");
 
-            if (httpResponse.IsSuccessStatusCode)
-            {
-                BinanceChain.TransactionFromHash transactionFromHash = JsonConvert.DeserializeObject<BinanceChain.TransactionFromHash>(await httpResponse.Content.ReadAsStringAsync());
+    //    }
 
-                if (transactionFromHash.Ok)
-                {
-                    if (FULL_TAX.Contains(transactionFromHash.Tx.Value.Memo))
-                    {
-                        FullyTaxed = true;
-                    }
+    //    List<ITransactionModel> transactionModels = new List<ITransactionModel> { this };
 
-                    foreach (BinanceChain.TransactionInformationMessage transactionInformationMessage in transactionFromHash.Tx.Value.Msg)
-                    {
-                        List<BinanceChain.TransactionAddressAndCoins> transactionInformationMessageValues = transactionInformationMessage.Value.Outputs.Where(b => b.Address == _address).ToList();
+    //    using (CallRateLimiter apiCallRateLimiter = new CallRateLimiter("BinanceApiCall", 10, TimeSpan.FromSeconds(1)))
+    //    {
+    //        HttpResponseMessage httpResponse = await apiCallRateLimiter.GetDataAsync($"https://dex.binance.org/api/v1/tx/{transactionId}?format=json");
 
-                        if (transactionInformationMessageValues.Count > 0)
-                        {
-                            for (int i = 1; i < transactionInformationMessageValues.Count; i++)
-                            {
-                                BlockChainTransactionModel blockChainTransactionModel = Clone();
+    //        if (httpResponse.IsSuccessStatusCode)
+    //        {
+    //            BinanceChain.TransactionFromHash transactionFromHash = JsonConvert.DeserializeObject<BinanceChain.TransactionFromHash>(await httpResponse.Content.ReadAsStringAsync());
 
-                                foreach (BinanceChain.TransactionCoin coin in transactionInformationMessageValues[i].Coins)
-                                {
-                                    blockChainTransactionModel.NativeAmount += ValueForOneCryptoTokenInNative * coin.Amount;
-                                    blockChainTransactionModel.CryptoCurrency += coin.Denom + "|";
-                                }
+    //            if (transactionFromHash.Ok)
+    //            {
+    //                if (FULL_TAX.Contains(transactionFromHash.Tx.Value.Memo))
+    //                {
+    //                    IsFullyTaxed = true;
+    //                }
 
-                                blockChainTransactionModel.CryptoCurrency.Remove(blockChainTransactionModel.CryptoCurrency.Length - 1);
-                                transactionModels.Add(blockChainTransactionModel);
-                            }
+    //                foreach (BinanceChain.TransactionInformationMessage transactionInformationMessage in transactionFromHash.Tx.Value.Msg)
+    //                {
+    //                    List<BinanceChain.TransactionAddressAndCoins> transactionInformationMessageValues = transactionInformationMessage.Value.Outputs.Where(b => b.Address == _address).ToList();
 
-                            BinanceChain.TransactionAddressAndCoins first = transactionInformationMessageValues[0];
+    //                    if (transactionInformationMessageValues.Count > 0)
+    //                    {
+    //                        for (int i = 1; i < transactionInformationMessageValues.Count; i++)
+    //                        {
+    //                            ITransactionModel blockChainTransactionModel = Clone();
 
-                            NativeAmount = 0;
+    //                            foreach (BinanceChain.TransactionCoin coin in transactionInformationMessageValues[i].Coins)
+    //                            {
+    //                                blockChainTransactionModel.NativeAmount += ValueForOneCryptoTokenInNative * coin.Amount;
+    //                                blockChainTransactionModel.CryptoCurrency += coin.Denom + "|";
+    //                            }
 
-                            foreach (BinanceChain.TransactionCoin coin in first.Coins)
-                            {
-                                CryptoCurrency = coin.Denom;
-                                CryptoCurrencyAmount += coin.Amount;
-                                NativeAmount += ValueForOneCryptoTokenInNative * coin.Amount;
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                Debug.Log("Binance api call failed with code: " + httpResponse.StatusCode + " and message " + await httpResponse.Content.ReadAsStringAsync());
-            }
-        }
+    //                            blockChainTransactionModel.CryptoCurrency.Remove(blockChainTransactionModel.CryptoCurrency.Length - 1);
+    //                            transactionModels.Add(blockChainTransactionModel);
+    //                        }
 
-        return transactionModels;
-    }
+    //                        BinanceChain.TransactionAddressAndCoins first = transactionInformationMessageValues[0];
+
+    //                        NativeAmount = 0;
+
+    //                        foreach (BinanceChain.TransactionCoin coin in first.Coins)
+    //                        {
+    //                            CryptoCurrency = coin.Denom;
+    //                            CryptoCurrencyAmount += coin.Amount;
+    //                            NativeAmount += ValueForOneCryptoTokenInNative * coin.Amount;
+    //                        }
+    //                    }
+    //                }
+    //            }
+    //        }
+    //        else
+    //        {
+    //            Debug.Log("Binance api call failed with code: " + httpResponse.StatusCode + " and message " + await httpResponse.Content.ReadAsStringAsync());
+    //        }
+    //    }
+
+    //    return transactionModels;
+    //}
 
     private async Task<List<ITransactionModel>> InitFromEthereumApi()
     {
@@ -187,7 +196,7 @@ public sealed class BlockChainTransactionModel : TransactionModelBase<BlockChain
                 {
                     for (int i = 1; i < transactions.Count; i++)
                     {
-                        BlockChainTransactionModel blockChainTransactionModel = Clone();
+                        ITransactionModel blockChainTransactionModel = Clone();
 
                         NativeAmount = transactions[i].Value * ValueForOneCryptoTokenInNative;
                         CryptoCurrency = transactions[i].TokenSymbol;
@@ -210,7 +219,7 @@ public sealed class BlockChainTransactionModel : TransactionModelBase<BlockChain
         return transactionModels;
     }
 
-    private BlockChainTransactionModel Clone()
+    public override ITransactionModel Clone()
     {
         return (BlockChainTransactionModel)MemberwiseClone();
     }

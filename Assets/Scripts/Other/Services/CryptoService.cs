@@ -132,6 +132,9 @@ public sealed class CryptoService : ICryptoService
 
     public void RunCalculations()
     {
+        _gains.Clear();
+        _losses.Clear();
+
         HandleReversions();
 
         WriteOverview();
@@ -142,11 +145,13 @@ public sealed class CryptoService : ICryptoService
         {
             foreach (ITransactionModel transaction in currencyTransaction.Value)
             {
-                if (transaction.TransactionType == TransactionType.Purchase)
+                ITransactionModel transactionClone = transaction.Clone();
+
+                if (transactionClone.TransactionType == TransactionType.Purchase || transactionClone.TransactionType == TransactionType.Interest || transactionClone.TransactionType == TransactionType.Rebate)
                 {
-                    purchaseTransactions.Add(transaction);
+                    purchaseTransactions.Add(transactionClone);
                 }
-                else if (transaction.TransactionType == TransactionType.Sale)
+                else if (transactionClone.TransactionType == TransactionType.Sale)
                 {
                     decimal cryptoCurrencyAmountFromTransactions = 0;
 
@@ -154,11 +159,11 @@ public sealed class CryptoService : ICryptoService
                     {
                         cryptoCurrencyAmountFromTransactions += purchaseTransactions[i].CryptoCurrencyAmount;
 
-                        if (cryptoCurrencyAmountFromTransactions >= transaction.CryptoCurrencyAmount)
+                        if (cryptoCurrencyAmountFromTransactions >= transactionClone.CryptoCurrencyAmount)
                         {
                             List<ITransactionModel> purchaseTransactionsNeededToCoverSale = purchaseTransactions.Take(i + 1).ToList();
 
-                            CalculateSaleFromPurchases(purchaseTransactionsNeededToCoverSale, transaction);
+                            CalculateSaleFromPurchases(purchaseTransactionsNeededToCoverSale, transactionClone);
 
                             if (purchaseTransactions[i].CryptoCurrencyAmount > 0)
                             {
@@ -178,8 +183,8 @@ public sealed class CryptoService : ICryptoService
             purchaseTransactions.Clear();
         }
 
-        _gains.Sort((x, y) => DateTime.Compare(x.PurchaseDate, y.PurchaseDate));
-        _losses.Sort((x, y) => DateTime.Compare(x.PurchaseDate, y.PurchaseDate));
+        _gains.Sort((x, y) => x.CompareTo(y));
+        _losses.Sort((x, y) => x.CompareTo(y));
 
         if (_gains.Count > 0)
         {
@@ -202,7 +207,7 @@ public sealed class CryptoService : ICryptoService
         }
 
         WriteTansactionGains();
-        WriteTranactionLosses();
+        WriteTranactionLosses();        
     }
 
     private void HandleReversions()
@@ -238,28 +243,45 @@ public sealed class CryptoService : ICryptoService
 
     private void CalculateSaleFromPurchases(List<ITransactionModel> purchaseTransactionsNeededToCoverSale, ITransactionModel saleTransaction)
     {
-        foreach (ITransactionModel transaction in purchaseTransactionsNeededToCoverSale)
+        decimal originalSaleValueForeachToken = saleTransaction.ValueForOneCryptoTokenInNative;
+
+        foreach (ITransactionModel purchaseTransaction in purchaseTransactionsNeededToCoverSale)
         {
-            if (saleTransaction.CryptoCurrencyAmount - transaction.CryptoCurrencyAmount > 0)
+            decimal cryptoCurrencySoldAmount = decimal.Zero;
+
+            if (saleTransaction.CryptoCurrencyAmount > purchaseTransaction.CryptoCurrencyAmount)
             {
-                saleTransaction.CryptoCurrencyAmount -= transaction.CryptoCurrencyAmount;
-                transaction.CryptoCurrencyAmount = 0;
+                saleTransaction.CryptoCurrencyAmount -= purchaseTransaction.CryptoCurrencyAmount;
+                cryptoCurrencySoldAmount = purchaseTransaction.CryptoCurrencyAmount;
+                purchaseTransaction.CryptoCurrencyAmount = 0;
+            }
+            else
+            {                
+                purchaseTransaction.CryptoCurrencyAmount -= saleTransaction.CryptoCurrencyAmount;
+                cryptoCurrencySoldAmount = saleTransaction.CryptoCurrencyAmount;
+                saleTransaction.CryptoCurrencyAmount = 0;
+            }
+
+            decimal transactionProfit = decimal.Zero;
+
+            if (purchaseTransaction.IsFullyTaxed)
+            {
+                transactionProfit = originalSaleValueForeachToken * cryptoCurrencySoldAmount;
             }
             else
             {
-                transaction.CryptoCurrencyAmount -= saleTransaction.CryptoCurrencyAmount;
-
+                transactionProfit = (saleTransaction.ValueForOneCryptoTokenInNative - purchaseTransaction.ValueForOneCryptoTokenInNative) * cryptoCurrencySoldAmount;
             }
-
-            decimal transactionProfit = (saleTransaction.ValueForOneCryptoTokenInNative - transaction.ValueForOneCryptoTokenInNative) * transaction.CryptoCurrencyAmount;
 
             if (transactionProfit < 0)
             {
-                _losses.Add(new TaxableEvent(transaction.TransactionId, saleTransaction.TransactionId, transaction.TimeStamp, saleTransaction.TimeStamp, transactionProfit, MainComponent.Instance.TargetCurrency));
+                _losses.Add(new TaxableEvent(purchaseTransaction.TransactionId, saleTransaction.TransactionId, saleTransaction.CryptoCurrency, purchaseTransaction.TimeStamp, saleTransaction.TimeStamp, 
+                    transactionProfit * -1, MainComponent.Instance.TargetCurrency, saleTransaction.WalletName, cryptoCurrencySoldAmount));
             }
             else if (transactionProfit > 0)
             {
-                _gains.Add(new TaxableEvent(transaction.TransactionId, saleTransaction.TransactionId, transaction.TimeStamp, saleTransaction.TimeStamp, transactionProfit, MainComponent.Instance.TargetCurrency));
+                _gains.Add(new TaxableEvent(purchaseTransaction.TransactionId, saleTransaction.TransactionId, saleTransaction.CryptoCurrency, purchaseTransaction.TimeStamp, saleTransaction.TimeStamp, 
+                    transactionProfit, MainComponent.Instance.TargetCurrency, saleTransaction.WalletName, cryptoCurrencySoldAmount));
             }
         }
     }

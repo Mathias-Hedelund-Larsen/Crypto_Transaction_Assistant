@@ -3,11 +3,11 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using UnityEngine;
 
-public abstract class TransactionModelBase<T> : ITransactionModel where T : TransactionModelBase<T>
+public abstract class TransactionModelBase : ITransactionModel
 {
     public const string CSV_DATA_ORDER = "Transaction ID,Date,Crypto currency, Crypto currency amount,Native currency,Native currency amount,Transaction type,Wallet name";
 
-    private string _transactionId;
+    protected string _transactionId;
 
     public DateTime TimeStamp { get; set; }
 
@@ -23,11 +23,11 @@ public abstract class TransactionModelBase<T> : ITransactionModel where T : Tran
 
     public TransactionType TransactionType { get; set; }
 
-    public bool FullyTaxed { get; set; }
+    public bool IsFullyTaxed { get; set; }
 
     public abstract string WalletName { get; }
 
-    public string TransactionId 
+    public virtual string TransactionId 
     { 
         get
         {
@@ -37,6 +37,19 @@ public abstract class TransactionModelBase<T> : ITransactionModel where T : Tran
             }
 
             return _transactionId;
+        }
+    }
+
+    protected void ApplyNonNegative()
+    {
+        if (CryptoCurrencyAmount < 0)
+        {
+            CryptoCurrencyAmount *= -1;
+        }
+
+        if (NativeAmount < 0)
+        {
+            NativeAmount *= -1;
         }
     }
 
@@ -127,4 +140,6 @@ public abstract class TransactionModelBase<T> : ITransactionModel where T : Tran
 
         return date;
     }
+
+    public abstract ITransactionModel Clone();
 }
